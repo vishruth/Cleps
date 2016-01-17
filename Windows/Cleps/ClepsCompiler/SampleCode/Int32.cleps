@@ -1,3 +1,6 @@
-﻿namespace SampleGeometry
+﻿namespace System.Types
 {
+	public class Int32
+	{
+	}
 }

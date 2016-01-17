@@ -12,6 +12,8 @@
     <TargetFrameworkVersion>v4.5.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <NuGetPackageImportStamp>
+    </NuGetPackageImportStamp>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -33,6 +35,13 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="Antlr4.Runtime">
+      <HintPath>..\..\Binaries\Antlr\Antlr4.Runtime.dll</HintPath>
+    </Reference>
+    <Reference Include="LLVMSharp, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\Binaries\LLVMSharp\LLVMSharp.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Xml.Linq" />
@@ -43,24 +52,41 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Compiler\CompileStatus.cs" />
+    <Compile Include="Antlr\ClepsBaseListener.cs" />
+    <Compile Include="Antlr\ClepsBaseVisitor.cs" />
+    <Compile Include="Antlr\ClepsLexer.cs" />
+    <Compile Include="Antlr\ClepsListener.cs" />
+    <Compile Include="Antlr\ClepsParser.cs" />
+    <Compile Include="Antlr\ClepsVisitor.cs" />
+    <Compile Include="Compiler\ClepsClassSkeletonGenerator.cs" />
     <Compile Include="Compiler\CompilerDriver.cs" />
+    <Compile Include="Compiler\CompilerError.cs" />
+    <Compile Include="Compiler\CompilerErrorException.cs" />
+    <Compile Include="Compiler\CompileStatus.cs" />
+    <Compile Include="Compiler\LexerParserErrorHandler.cs" />
+    <Compile Include="Compiler\LLVMRegister.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="Antlr\Cleps.g4" />
     <None Include="App.config" />
+    <None Include="packages.config" />
     <None Include="SampleCode\Int32.cleps" />
-  </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Antlr\" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
   <Target Name="BeforeBuild">
-  </Target>
+  </Target> -->
   <Target Name="AfterBuild">
+    <Copy SourceFiles="..\..\Binaries\LLVMSharp\libLLVM.dll" DestinationFiles="$(OutputPath)\libLLVM.dll" SkipUnchangedFiles="true" />
   </Target>
-  -->
+  <Import Project="..\packages\AntlrBuild.4.5.1.0\build\AntlrBuild.targets" Condition="Exists('..\packages\AntlrBuild.4.5.1.0\build\AntlrBuild.targets')" />
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('..\packages\AntlrBuild.4.5.1.0\build\AntlrBuild.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\AntlrBuild.4.5.1.0\build\AntlrBuild.targets'))" />
+  </Target>
 </Project>

@@ -24,7 +24,7 @@ namespace ClepsCompiler
                 return -2;
             }
 
-            CompilerDriver driver = new CompilerDriver(programParams.Files);
+            CompilerDriver driver = new CompilerDriver(programParams.Files, "Test.ll");
             CompileStatus status = driver.CompileFiles();
 
             if(status.Success)
@@ -33,7 +33,10 @@ namespace ClepsCompiler
             }
             else
             {
-                Console.WriteLine(String.Format("Error building\n{0}:{1} {2}", status.ErrorSourceFile, status.ErrorLineNumber, status.ErrorMessage));
+                Console.WriteLine("Error building");
+                Console.WriteLine(String.Join("\n", 
+                    status.Errors.Select(e => String.Format("File: {0} Line:{1} Column:{2} {3}", e.ErrorSourceFile, e.ErrorLineNumber, e.ErrorPositionInLine, e.ErrorMessage))
+                ));
             }
 
             Console.ReadLine();
