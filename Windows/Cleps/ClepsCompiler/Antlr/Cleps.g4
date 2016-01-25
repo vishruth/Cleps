@@ -20,6 +20,7 @@ IF : 'if';
 FOR : 'for';
 DO : 'do';
 WHILE : 'while';
+RETURN : 'return';
 ASSIGNMENT : '=';
 ID : [a-zA-Z] [a-zA-Z0-9_]*;
 NUMERIC : [0-9]+ ('.' [0-9]+)? ID?;
@@ -87,15 +88,17 @@ functionCall : FunctionName=ID '(' (FunctionParameters+=rightHandExpression (','
 
 /////////////////////////////////////////////////////////////
 
-functionStatement : functionVariableDeclarationStatement | functionFieldAssignmentStatement | functionVariableAssigmentStatement | functionDeclarationStatement | functionCallStatement | ifStatement | doWhileStatement;
+functionStatement : functionReturnStatement | functionVariableDeclarationStatement | functionFieldAssignmentStatement | functionVariableAssigmentStatement | functionDeclarationStatement | functionCallStatement | ifStatement | doWhileStatement;
+
+functionReturnStatement : RETURN rightHandExpression? END;
 
 functionVariableDeclarationStatement : variableDeclarationStatement;
 variableDeclarationStatement : typename VariableName=ID (ASSIGNMENT rightHandExpression)? END;
 functionVariableAssigmentStatement : VariableName=ID ASSIGNMENT rightHandExpression END;
 functionFieldAssignmentStatement : LeftExpression=rightHandExpression '.' VariableName=ID ASSIGNMENT RightExpression=rightHandExpression END;
 
-functionDeclarationStatement : FUNC typenameAndVoid FunctionName=ID (ASSIGNMENT '(' functionParametersList ')' statementBlock)? END;
-functionParametersList : (typename nestedIdentifier (',' typename nestedIdentifier)*)?;
+functionDeclarationStatement : FUNC FunctionName=ID (ASSIGNMENT FUNC FunctionReturnType=typenameAndVoid '(' functionParametersList ')' statementBlock)? END;
+functionParametersList : (FunctionParameterTypes+=typename FunctionParameterNames+=nestedIdentifier (',' FunctionParameterTypes+=typename FunctionParameterNames+=nestedIdentifier)*)?;
 statementBlock : '{' functionStatement* '}';
 
 functionCallStatement : (rightHandExpression '.')? functionCall END;

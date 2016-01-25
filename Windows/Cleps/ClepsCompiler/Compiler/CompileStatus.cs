@@ -6,14 +6,19 @@ using System.Threading.Tasks;
 
 namespace ClepsCompiler.Compiler
 {
+    /// <summary>
+    /// A class that maintains properties of the current compilation state about the outcome of the compilation process
+    /// </summary>
     class CompileStatus
     {
-        public bool Success { get; private set; }
+        private bool ExitOnError;
 
+        public bool Success { get; private set; }
         public List<CompilerError> Errors = new List<CompilerError>();
 
-        public CompileStatus()
+        public CompileStatus(bool exitOnError)
         {
+            ExitOnError = exitOnError;
             Success = true;
         }
 
@@ -21,21 +26,12 @@ namespace ClepsCompiler.Compiler
         {
             Errors.Add(e);
             Success = false;
-        }
 
-        public void ThrowOnError()
-        {
-            if (Errors.Count > 0)
+            if (ExitOnError)
             {
-                CompilerErrorException e = new CompilerErrorException(Errors);
-                throw e;
+                CompilerErrorException ex = new CompilerErrorException(Errors);
+                throw ex;
             }
-        }
-
-        public void ThrowError(CompilerError e)
-        {
-            AddError(e);
-            ThrowOnError();
         }
     }
 }

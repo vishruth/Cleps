@@ -2,5 +2,21 @@
 {
 	public class Int32
 	{
+		public $System.LLVMTypes.I32 RawInteger;
+
+		public static fn Test = fn $System.Types.Bool ($System.Types.Bool param1)
+		{
+			return false;
+		};
+
+		public static fn Test2 = fn $System.Types.Bool ($System.Types.Bool param1)
+		{
+			return param1;
+		};
+
+		public static fn Main = fn $System.Types.Int32 ()
+		{
+			return 0;
+		};
 	}
 }

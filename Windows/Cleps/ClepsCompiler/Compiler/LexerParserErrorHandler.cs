@@ -7,6 +7,9 @@ using System.Threading.Tasks;
 
 namespace ClepsCompiler.Compiler
 {
+    /// <summary>
+    /// An error handler for the antlr lexer parser that processes the cleps code
+    /// </summary>
     class LexerParserErrorHandler : BaseErrorListener
     {
         public CompileStatus CompileStatus;

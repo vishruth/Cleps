@@ -6,6 +6,9 @@ using System.Threading.Tasks;
 
 namespace ClepsCompiler.Compiler
 {
+    /// <summary>
+    /// All errors found during compilation is defined in terms of the following properties
+    /// </summary>
     class CompilerError
     {
         public string ErrorSourceFile { get; private set; }

@@ -5,22 +5,25 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Antlr4.Runtime.Misc;
+using ClepsCompiler.CompilerHelpers;
+using System.Diagnostics;
 
 namespace ClepsCompiler.Compiler
 {
-    class ClepsClassSkeletonGenerator : ClepsBaseVisitor<int>
+    /// <summary>
+    /// This parser is used to generate a list of classes defined in the code
+    /// </summary>
+    class ClepsClassNamesParser : ClepsAbstractParser<int>
     {
-        private LLVMContextRef Context;
-        private LLVMModuleRef Module;
-        private LLVMBuilderRef Builder;
+        private ClassManager ClassManager;
+        private CompileStatus Status;
 
         private List<string> CurrentNamespaceAndClass;
 
-        public ClepsClassSkeletonGenerator(LLVMContextRef context, LLVMModuleRef module, LLVMBuilderRef builder)
+        public ClepsClassNamesParser(ClassManager classManager, CompileStatus status)
         {
-            Context = context;
-            Module = module;
-            Builder = builder;
+            ClassManager = classManager;
+            Status = status;
         }
 
         public override int VisitCompilationUnit([NotNull] ClepsParser.CompilationUnitContext context)
@@ -43,11 +46,20 @@ namespace ClepsCompiler.Compiler
             CurrentNamespaceAndClass.Add(context.ClassName.Text);
 
             string className = String.Join(".", CurrentNamespaceAndClass);
-            var ret = VisitChildren(context);
+            
+            //if this qualified name already exists, there is an error
+            if(ClassManager.IsClassLoaded(className))
+            {
+                string errorMessage = String.Format("Class {0} has multiple definitions", className);
+                Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
+                //Don't process this class
+                return -1;
+            }
+
+            ClassManager.AddNewClass(className);
 
             CurrentNamespaceAndClass.RemoveAt(CurrentNamespaceAndClass.Count - 1);
-            return ret;
+            return 0;
         }
-
     }
 }
