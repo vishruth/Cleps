@@ -1,0 +1,8 @@
+The text of the licenses and copyrights referred to are available under the licenses folder
+
+This project and its code is licensed under the Apache License 2.0
+
+This project uses several other projects either as libraries or tools that each has theor own license. 
+
+LLVM toolset - University of Illinois/NCSA Open Source License
+Antlr - BSD 3-Clause License
