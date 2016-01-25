@@ -2,11 +2,16 @@ The Cleps Programming Language
 ------------------------------
 
 **Name**
-C - C family (cross platform, curly braces, semi colons and so on)
-L - Language
-E - for Ease (easy to write, with high level constructs like C# or python, code generation natively supported etc.)
-P - Performance (maintain the performance of programs written in Assembly C, C++)
-S - and Security (guard against the ability to write code that can be exploited via overflows, thread timing etc. etc via contracts, refinement types and static analysis within the compiler)
+
+	• C - C family (cross platform, curly braces, semi colons and so on)
+	
+	• L - Language
+	
+	• E - for Ease (easy to write, with high level constructs like C# or python, code generation natively supported etc.)
+	
+	• P - Performance (maintain the performance of programs written in Assembly C, C++)
+	
+	• S - and Security (guard against the ability to write code that can be exploited via overflows, thread timing etc. via contracts, refinement types and static analysis within the compiler)
 
 To contribute
 -------------
