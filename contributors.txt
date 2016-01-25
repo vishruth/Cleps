@@ -47,4 +47,4 @@ the end of the following contributors list.
 CONTRIBUTORS:
 
 YYYY/MM/DD, github id, Full name, email
-2016/01/25, shravanrn, Shravan Ravi Narayan, shravanrn [a@t] gmail [d.ot] com
+2016/01/25, shravanrn, Shravan Ravi Narayan, shravanrn [a@t] gmail [d.ot] com, the[d.ot]sh[d.ot]developer [a@t] outlook [d.ot] com
