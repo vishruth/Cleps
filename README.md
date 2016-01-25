@@ -8,7 +8,12 @@ E - for Ease (easy to write, with high level constructs like C# or python, code 
 P - Performance (maintain the performance of programs written in Assembly C, C++)
 S - and Security (guard against the ability to write code that can be exploited via overflows, thread timing etc. etc via contracts, refinement types and static analysis within the compiler)
 
-High level goals in order of preference
+To contribute
+-------------
+Add your name to contributors.txt in your first pull request
+
+High level goals (in order of preference)
+-----------------------------------------
 
 The language may or may not meet all of the goals yet - Let's see how it pans out
 
