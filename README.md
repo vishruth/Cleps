@@ -19,6 +19,7 @@ The language may or may not meet all of the goals yet - Let's see how it pans ou
 
 	• Helps write bug free programs
 		○ With all the guarantees of a managed language such as bounds and overflow checking etc.
+		○ Contracts and Refinement types to help avoid errors
 		○ Testing should as short and simple as possible. Language should be built to support easy testing.
 		○ A permission model for the application built in to the language
 _
