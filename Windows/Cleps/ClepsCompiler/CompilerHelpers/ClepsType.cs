@@ -16,6 +16,7 @@ namespace ClepsCompiler.CompilerHelpers
         public bool IsBasicType { get; private set; }
 
         public string RawTypeName { get; private set; }
+        public int PtrIndirectionLevel { get; private set; }
         public ClepsType FunctionReturnType { get; private set; }
         public List<ClepsType> FunctionParameters { get; private set; }
 
@@ -36,7 +37,7 @@ namespace ClepsCompiler.CompilerHelpers
                 return true;
             }
 
-            if (c1.IsBasicType == true && c2.IsBasicType == true && c1.RawTypeName == c2.RawTypeName)
+            if (c1.IsBasicType == true && c2.IsBasicType == true && c1.RawTypeName == c2.RawTypeName && c1.PtrIndirectionLevel == c2.PtrIndirectionLevel)
             {
                 return true;
             }
@@ -86,20 +87,31 @@ namespace ClepsCompiler.CompilerHelpers
             throw new Exception("Type is not void, basic or a function type");
         }
 
-        public static ClepsType GetBasicType(string rawTypeName)
+        public static ClepsType GetBasicType(string rawTypeName, int ptrIndirectionLevel)
         {
             return new ClepsType()
             {
                 IsFunctionType = false,
                 IsVoidType = false,
                 IsBasicType = true,
-                RawTypeName = rawTypeName
+                RawTypeName = rawTypeName,
+                PtrIndirectionLevel = ptrIndirectionLevel
             };
         }
 
         public static ClepsType GetBasicType(ClepsParser.TypenameContext typeContext)
         {
-            return GetBasicType(typeContext.RawTypeName.GetText());
+            return GetBasicType(typeContext.RawTypeName.GetText(), typeContext._PtrIndirectionLevel.Count);
+        }
+
+        public static ClepsType GetPointerToBasicType(ClepsType basicType)
+        {
+            if(!basicType.IsBasicType)
+            {
+                throw new Exception("Expected basic type");
+            }
+
+            return GetBasicType(basicType.RawTypeName, basicType.PtrIndirectionLevel + 1);
         }
 
         public static ClepsType GetVoidType()
@@ -132,6 +144,38 @@ namespace ClepsCompiler.CompilerHelpers
                 FunctionReturnType = functionReturnType,
                 FunctionParameters = functionParameters
             };
+        }
+
+        public string GetTypeName()
+        {
+            if (IsBasicType || IsFunctionType)
+            {
+                return RawTypeName + new string('*', PtrIndirectionLevel);
+            }
+            else if (IsVoidType)
+            {
+                return "void";
+            }
+            else
+            {
+                throw new Exception("Unknown cleps type category");
+            }
+        }
+
+        public override string ToString()
+        {
+            if(IsBasicType)
+            {
+                return RawTypeName + new string('*', PtrIndirectionLevel); ;
+            }
+            else if(IsVoidType)
+            {
+                return "void";
+            }
+            else
+            {
+                throw new NotImplementedException();
+            }
         }
     }
 }

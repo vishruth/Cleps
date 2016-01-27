@@ -15,30 +15,48 @@ namespace ClepsCompiler.CompilerHelpers
         public string FullyQualifiedName { get; private set; }
         public Dictionary<string, ClepsType> MemberVariables { get; private set; }
         public Dictionary<string, ClepsType> MemberMethods { get; private set; }
+        public Dictionary<string, ClepsType> StaticMemberVariables { get; private set; }
+        public Dictionary<string, ClepsType> StaticMemberMethods { get; private set; }
 
         public ClepsClass()
         {
             MemberVariables = new Dictionary<string, ClepsType>();
             MemberMethods = new Dictionary<string, ClepsType>();
+            StaticMemberVariables = new Dictionary<string, ClepsType>();
+            StaticMemberMethods = new Dictionary<string, ClepsType>();
         }
 
         public bool DoesClassContainMember(string memberName)
         {
-            return MemberVariables.ContainsKey(memberName) || MemberMethods.ContainsKey(memberName);
+            return MemberVariables.ContainsKey(memberName) || MemberMethods.ContainsKey(memberName) ||
+                StaticMemberVariables.ContainsKey(memberName) || StaticMemberMethods.ContainsKey(memberName);
         }
 
-        public void AddNewMember(string memberName, ClepsType memberType)
+        public void AddNewMember(string memberName, bool isStatic, ClepsType memberType)
         {
-            bool memberNameExists = MemberVariables.ContainsKey(memberName) || MemberMethods.ContainsKey(memberName);
-            Debug.Assert(!memberNameExists);
+            Debug.Assert(!DoesClassContainMember(memberName));
 
-            if (memberType.IsBasicType)
+            if (isStatic)
             {
-                MemberVariables.Add(memberName, memberType);
+                if (memberType.IsBasicType)
+                {
+                    StaticMemberVariables.Add(memberName, memberType);
+                }
+                else
+                {
+                    StaticMemberMethods.Add(memberName, memberType);
+                }
             }
             else
             {
-                MemberMethods.Add(memberName, memberType);
+                if (memberType.IsBasicType)
+                {
+                    MemberVariables.Add(memberName, memberType);
+                }
+                else
+                {
+                    MemberMethods.Add(memberName, memberType);
+                }
             }
         }
     }

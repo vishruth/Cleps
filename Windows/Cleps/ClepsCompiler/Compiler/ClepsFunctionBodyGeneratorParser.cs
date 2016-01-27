@@ -12,23 +12,29 @@ namespace ClepsCompiler.Compiler
     /// <summary>
     /// This parser is used to generate LLVM bytecode for function and method bodies
     /// </summary>
-    class ClepsFunctionBodyGeneratorParser : ClepsAbstractParser<LLVMValueRef>
+    class ClepsFunctionBodyGeneratorParser : ClepsAbstractParser<LLVMRegister>
     {
+        private ClassManager ClassManager;
+        private CompileStatus Status;
         private LLVMContextRef Context;
         private LLVMModuleRef Module;
         private LLVMBuilderRef Builder;
+        private ClepsLLVMTypeConvertor ClepsLLVMTypeConvertorInst;
 
         private List<string> CurrentNamespaceAndClass;
         private VariableManager VariableManager;
 
-        public ClepsFunctionBodyGeneratorParser(LLVMContextRef context, LLVMModuleRef module, LLVMBuilderRef builder)
+        public ClepsFunctionBodyGeneratorParser(ClassManager classManager, CompileStatus status, LLVMContextRef context, LLVMModuleRef module, LLVMBuilderRef builder, ClepsLLVMTypeConvertor clepsLLVMTypeConvertor)
         {
+            ClassManager = classManager;
+            Status = status;
             Context = context;
             Module = module;
             Builder = builder;
+            ClepsLLVMTypeConvertorInst = clepsLLVMTypeConvertor;
         }
 
-        public override LLVMValueRef VisitCompilationUnit([NotNull] ClepsParser.CompilationUnitContext context)
+        public override LLVMRegister VisitCompilationUnit([NotNull] ClepsParser.CompilationUnitContext context)
         {
             CurrentNamespaceAndClass = new List<String>();
             VariableManager = new VariableManager();
@@ -37,7 +43,7 @@ namespace ClepsCompiler.Compiler
             return ret;
         }
 
-        public override LLVMValueRef VisitNamespaceBlockStatement([NotNull] ClepsParser.NamespaceBlockStatementContext context)
+        public override LLVMRegister VisitNamespaceBlockStatement([NotNull] ClepsParser.NamespaceBlockStatementContext context)
         {
             CurrentNamespaceAndClass.Add(context.NamespaceName.GetText());
             var ret = VisitChildren(context);
@@ -45,7 +51,7 @@ namespace ClepsCompiler.Compiler
             return ret;
         }
 
-        public override LLVMValueRef VisitClassDeclarationStatements([NotNull] ClepsParser.ClassDeclarationStatementsContext context)
+        public override LLVMRegister VisitClassDeclarationStatements([NotNull] ClepsParser.ClassDeclarationStatementsContext context)
         {
             CurrentNamespaceAndClass.Add(context.ClassName.Text);
             var ret = VisitChildren(context);
@@ -53,19 +59,49 @@ namespace ClepsCompiler.Compiler
             return ret;
         }
 
-        public override LLVMValueRef VisitFunctionDeclarationStatement([NotNull] ClepsParser.FunctionDeclarationStatementContext context)
+        public override LLVMRegister VisitAssignmentFunctionDeclarationStatement([NotNull] ClepsParser.AssignmentFunctionDeclarationStatementContext context)
         {
+            ClepsParser.TypenameAndVoidContext returnTypeContext = context.FunctionReturnType;
+            ClepsParser.FunctionParametersListContext parametersContext = context.functionParametersList();
             string functionName = context.FunctionName.Text;
-            string fullyQualifiedName = String.Format("{0}.{1}", String.Join(".", CurrentNamespaceAndClass), functionName);
+            return ImplementFunctionBody(context, returnTypeContext, parametersContext, functionName);
+        }
+
+        public override LLVMRegister VisitFunctionDeclarationStatement([NotNull] ClepsParser.FunctionDeclarationStatementContext context)
+        {
+            ClepsParser.TypenameAndVoidContext returnTypeContext = context.FunctionReturnType;
+            ClepsParser.FunctionParametersListContext parametersContext = context.functionParametersList();
+            string functionName = context.FunctionName.Text;
+            return ImplementFunctionBody(context, returnTypeContext, parametersContext, functionName);
+        }
+
+        private LLVMRegister ImplementFunctionBody<T>
+        (
+            T context, 
+            ClepsParser.TypenameAndVoidContext returnTypeContext, 
+            ClepsParser.FunctionParametersListContext parametersContext, 
+            string functionName
+        ) where T : Antlr4.Runtime.ParserRuleContext
+        {
+            string className = String.Join(".", CurrentNamespaceAndClass);
+            string fullyQualifiedName = String.Format("{0}.{1}", className, functionName);
+
+            if(!ClassManager.DoesClassContainMember(className, functionName))
+            {
+                string errorMessage = String.Format("Class {0} does not have a definition for {1}", className, functionName);
+                Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
+                //Don't process this member
+                return null;
+            }
 
             LLVMValueRef currFunc = LLVM.GetNamedFunction(Module, fullyQualifiedName);
             LLVMBasicBlockRef basicBlock = LLVM.GetFirstBasicBlock(currFunc);
             LLVM.PositionBuilderAtEnd(Builder, basicBlock);
 
-            ClepsType clepsReturnType = ClepsType.GetBasicOrVoidType(context.FunctionReturnType);
-            List<ClepsType> clepsParameterTypes = context.functionParametersList()._FunctionParameterTypes.Select(t => ClepsType.GetBasicType(t)).ToList();
+            ClepsType clepsReturnType = ClepsType.GetBasicOrVoidType(returnTypeContext);
+            List<ClepsType> clepsParameterTypes = parametersContext._FunctionParameterTypes.Select(t => ClepsType.GetBasicType(t)).ToList();
 
-            List<string> paramNames = context.functionParametersList()._FunctionParameterNames.Select(p => p.GetText()).ToList();
+            List<string> paramNames = parametersContext._FunctionParameterNames.Select(p => p.GetText()).ToList();
             List<LLVMValueRef> paramValueRegisters = currFunc.GetParams().ToList();
 
             VariableManager.AddBlock();
@@ -81,7 +117,7 @@ namespace ClepsCompiler.Compiler
             return ret;
         }
 
-        public override LLVMValueRef VisitStatementBlock([NotNull] ClepsParser.StatementBlockContext context)
+        public override LLVMRegister VisitStatementBlock([NotNull] ClepsParser.StatementBlockContext context)
         {
             VariableManager.AddBlock();
             var ret = VisitChildren(context);
@@ -96,21 +132,54 @@ namespace ClepsCompiler.Compiler
 
         #region Function Statement Implementations
 
-        public override LLVMValueRef VisitFunctionReturnStatement([NotNull] ClepsParser.FunctionReturnStatementContext context)
+        public override LLVMRegister VisitFunctionReturnStatement([NotNull] ClepsParser.FunctionReturnStatementContext context)
         {
             LLVMValueRef returnValueRegister;
+            ClepsType returnType;
 
             if(context.rightHandExpression() == null)
             {
                 returnValueRegister = LLVM.BuildRetVoid(Builder);
+                returnType = ClepsType.GetVoidType();
             }
             else
             {
-                LLVMValueRef returnValue = Visit(context.rightHandExpression());
-                returnValueRegister = LLVM.BuildRet(Builder, returnValue);
+                var returnValue = Visit(context.rightHandExpression());
+                returnValueRegister = LLVM.BuildRet(Builder, returnValue.LLVMValueRef);
+                returnType = returnValue.VariableType;
             }
 
-            return returnValueRegister;
+            var ret = new LLVMRegister(returnType, returnValueRegister);
+            return ret;
+        }
+
+        public override LLVMRegister VisitFunctionVariableDeclarationStatement([NotNull] ClepsParser.FunctionVariableDeclarationStatementContext context)
+        {
+            ClepsParser.VariableDeclarationStatementContext variableDeclarationStatement = context.variableDeclarationStatement();
+            string variableName = variableDeclarationStatement.VariableName.Text;
+            
+            if(VariableManager.IsVariableDefined(variableName))
+            {
+                string errorMessage = String.Format("Variable {0} is already defined", variableName);
+                Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
+                return null;
+            }
+
+            ClepsType clepsVariableType = ClepsType.GetBasicType(variableDeclarationStatement.typename());
+            LLVMTypeRef? llvmVariableType = ClepsLLVMTypeConvertorInst.GetPrimitiveLLVMTypeOrNull(clepsVariableType);
+
+            if(llvmVariableType == null)
+            {
+                string errorMessage = String.Format("Type {0} was not found", clepsVariableType.GetTypeName());
+                Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
+                return null;
+            }
+
+            LLVMValueRef variablePtr = LLVM.BuildAlloca(Builder, llvmVariableType.Value, variableName);
+            VariableManager.AddLocalVariable(variableName, clepsVariableType, variablePtr);
+            LLVMRegister ret = new LLVMRegister(clepsVariableType, variablePtr);
+
+            return ret;
         }
 
         #endregion Function Statement Implementations
@@ -121,32 +190,38 @@ namespace ClepsCompiler.Compiler
 
         #region Right Hand Expressions Implementations
 
-        public override LLVMValueRef VisitVariableAssignment([NotNull] ClepsParser.VariableAssignmentContext context)
+        public override LLVMRegister VisitVariableAssignment([NotNull] ClepsParser.VariableAssignmentContext context)
         {
             string variableName = context.VariableName.Text;
-            LLVMValueRef ret = VariableManager.GetVariable(variableName).LLVMValueRef;
+            LLVMRegister ret = VariableManager.GetVariable(variableName);
             return ret;
         }
 
-        public override LLVMValueRef VisitNumericAssignments([NotNull] ClepsParser.NumericAssignmentsContext context)
+        public override LLVMRegister VisitNumericAssignments([NotNull] ClepsParser.NumericAssignmentsContext context)
         {
-            string numericValueString = context.NUMERIC().GetText();
-            ulong numericValue;
-            if(!ulong.TryParse(numericValueString, out numericValue))
+            string valueString = context.NUMERIC().GetText();
+            ulong value;
+            if(!ulong.TryParse(valueString, out value))
             {
-                throw new Exception(String.Format("Numeric value {0} not a valid int", numericValueString));
+                throw new Exception(String.Format("Numeric value {0} not a valid int", valueString));
             }
 
-            LLVMValueRef constantValue = LLVM.ConstInt(LLVM.Int32Type(), numericValue, false);
-            return constantValue;
+            LLVMTypeRef llvmType = LLVM.Int32Type();
+            ClepsType clepsType = ClepsLLVMTypeConvertor.GetClepsType(llvmType);
+            LLVMValueRef register = LLVM.ConstInt(llvmType, value, false);
+            LLVMRegister ret = new LLVMRegister(clepsType, register);
+            return ret;
         }
 
-        public override LLVMValueRef VisitBooleanAssignments([NotNull] ClepsParser.BooleanAssignmentsContext context)
+        public override LLVMRegister VisitBooleanAssignments([NotNull] ClepsParser.BooleanAssignmentsContext context)
         {
             bool boolValue = context.TRUE() != null;
             ulong value = boolValue ? 1u : 0u;
-            LLVMValueRef boolRegister = LLVM.ConstInt(LLVM.Int1Type(), value, false);
-            return boolRegister;
+            LLVMTypeRef llvmType = LLVM.Int1Type();
+            ClepsType clepsType = ClepsLLVMTypeConvertor.GetClepsType(llvmType);
+            LLVMValueRef register = LLVM.ConstInt(llvmType, value, false);
+            LLVMRegister ret = new LLVMRegister(clepsType, register);
+            return ret;
         }
 
         #endregion Right Hand Expressions Implementations

@@ -1,20 +1,34 @@
 ﻿namespace System.Types
 {
+	public class Bool
+	{
+		public $System.LLVMTypes.I1 RawBoolean;
+	}
+
 	public class Int32
 	{
 		public $System.LLVMTypes.I32 RawInteger;
 
-		public static fn Test = fn $System.Types.Bool ($System.Types.Bool param1)
+		public assignment = fn void ($System.LLVMTypes.I32 param2)
 		{
+			return;
+		};
+	}
+
+	public class MainProgram
+	{
+		public static fn Test = fn $System.LLVMTypes.I1 ($System.LLVMTypes.I1 param1)
+		{
+			$System.Types.Int32 testVar;
 			return false;
 		};
 
-		public static fn Test2 = fn $System.Types.Bool ($System.Types.Bool param1)
+		public static fn Test2 = fn $System.LLVMTypes.I1 ($System.LLVMTypes.I1 param1)
 		{
 			return param1;
 		};
 
-		public static fn Main = fn $System.Types.Int32 ()
+		public static fn Main = fn $System.LLVMTypes.I32 ()
 		{
 			return 0;
 		};

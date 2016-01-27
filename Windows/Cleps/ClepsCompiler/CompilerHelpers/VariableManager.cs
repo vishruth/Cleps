@@ -29,12 +29,12 @@ namespace ClepsCompiler.CompilerHelpers
         public void AddLocalVariable(string variableName, ClepsType variableType, LLVMValueRef llvmValueRef)
         {
             Debug.Assert(LocalVariableBlocks.Count > 0);
-            LocalVariableBlocks.Last().Add(variableName, new LLVMRegister(variableName, variableType, llvmValueRef));
+            LocalVariableBlocks.Last().Add(variableName, new LLVMRegister(variableType, llvmValueRef));
         }
 
         public bool IsVariableDefined(string variableName)
         {
-            return LocalVariableBlocks.Select(block => block.ContainsKey(variableName)).Any();
+            return LocalVariableBlocks.Select(block => block.ContainsKey(variableName)).Any(c => c);
         }
 
         public LLVMRegister GetVariable(string variableName)
@@ -53,7 +53,7 @@ namespace ClepsCompiler.CompilerHelpers
             LLVMRegister ret = localVariablesBlockWithVar[variableName];
             Debug.Assert(ret.VariableType == variableType);
 
-            localVariablesBlockWithVar[variableName] = new LLVMRegister(variableName, variableType, llvmValueRef);
+            localVariablesBlockWithVar[variableName] = new LLVMRegister(variableType, llvmValueRef);
         }
     }
 }

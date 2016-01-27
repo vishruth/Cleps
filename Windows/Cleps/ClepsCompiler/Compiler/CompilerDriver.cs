@@ -3,6 +3,7 @@ using ClepsCompiler.CompilerHelpers;
 using LLVMSharp;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -43,16 +44,20 @@ namespace ClepsCompiler.Compiler
                     ClepsClassNamesParser classSkeletonGenerator = new ClepsClassNamesParser(classManager, status);
                     ParseFilesWithGenerator(classSkeletonGenerator, status);
                 }
+
+                Dictionary<string, LLVMTypeRef> classSkeletons = GenerateClassSkeletons(classManager, status, context, module, builder);
+                ClepsLLVMTypeConvertor clepsLLVMTypeConvertor = new ClepsLLVMTypeConvertor(classSkeletons);
+
                 {
                     ClepsMemberParser memberGenerator = new ClepsMemberParser(classManager, status);
                     ParseFilesWithGenerator(memberGenerator, status);
                 }
 
-                GenerateClassAndFunctionSkeletons(classManager, status, context, module, builder);
+                GenerateFunctionSkeletons(classManager, status, context, module, builder, clepsLLVMTypeConvertor);
                 AddEntryPoint(classManager, status, context, module, builder);
 
                 {
-                    ClepsFunctionBodyGeneratorParser functionBodyGenerator = new ClepsFunctionBodyGeneratorParser(context, module, builder);
+                    ClepsFunctionBodyGeneratorParser functionBodyGenerator = new ClepsFunctionBodyGeneratorParser(classManager, status, context, module, builder, clepsLLVMTypeConvertor);
                     ParseFilesWithGenerator(functionBodyGenerator, status);
                 }
 
@@ -74,37 +79,117 @@ namespace ClepsCompiler.Compiler
             return status;
         }
 
-        private void GenerateClassAndFunctionSkeletons(ClassManager classManager, CompileStatus status, LLVMContextRef context, LLVMModuleRef module, LLVMBuilderRef builder)
+        private Dictionary<string, LLVMTypeRef> GenerateClassSkeletons(ClassManager classManager, CompileStatus status, LLVMContextRef context, LLVMModuleRef module, LLVMBuilderRef builder)
+        {
+            Dictionary<string, LLVMTypeRef> classSkeletons = new Dictionary<string, LLVMTypeRef>();
+            foreach (string className in classManager.LoadedClassesAndMembers.Keys)
+            {
+                LLVMTypeRef structType = LLVM.StructCreateNamed(context, className);
+                classSkeletons[className] = structType;
+            }
+            return classSkeletons;
+        }
+
+        private void GenerateFunctionSkeletons(ClassManager classManager, CompileStatus status, LLVMContextRef context, LLVMModuleRef module, LLVMBuilderRef builder, ClepsLLVMTypeConvertor clepsLLVMTypeConvertor)
         {
             foreach (KeyValuePair<string, ClepsClass> classNameAndDetails in classManager.LoadedClassesAndMembers)
             {
                 string className = classNameAndDetails.Key;
                 ClepsClass classDetails = classNameAndDetails.Value;
 
-                LLVMTypeRef[] memberTypes = classDetails.MemberVariables.Values.Select(clepsType => ClepsLLVMTypeConvertor.GetPrimitiveLLVMTypeOrNull(clepsType).Value).ToArray();
-                LLVMTypeRef structType = LLVM.StructCreateNamed(context, className);
-                LLVM.StructSetBody(structType, memberTypes, false);
+                ClepsType classType = ClepsType.GetBasicType(className, 0 /* ptrIndirectionLevel */);
+                LLVMTypeRef? structType = clepsLLVMTypeConvertor.GetPrimitiveLLVMTypeOrNull(classType);
 
-                foreach(KeyValuePair<string, ClepsType> functionNameAndDetails in classDetails.MemberMethods)
+                Debug.Assert(structType != null);
+
+                //TODO: need to move to a parser to get line numbers and file names for errors
+
+                bool membersLLVMTypesFound;
+                LLVMTypeRef[] memberTypes = GetLLVMTypesArrFromClepsTypesList(clepsLLVMTypeConvertor, classDetails.MemberVariables.Values.ToList(), status, out membersLLVMTypesFound);
+
+                if(!membersLLVMTypesFound)
+                {
+                    //move on to the next function
+                    continue;
+                }
+
+                LLVM.StructSetBody(structType.Value, memberTypes, false);
+
+                foreach (KeyValuePair<string, ClepsType> staticVariable in classDetails.StaticMemberVariables)
+                {
+                    string memberName = staticVariable.Key;
+                    ClepsType clepsMemberType = staticVariable.Value;
+
+                    string fullyQualifiedName = String.Format("{0}.{1}", className, memberName);
+                    LLVMTypeRef? llvmMemberType = clepsLLVMTypeConvertor.GetPrimitiveLLVMTypeOrNull(clepsMemberType);
+
+                    if (llvmMemberType == null)
+                    {
+                        string errorMessage = String.Format("Type {0} was not found", clepsMemberType.GetTypeName());
+                        status.AddError(new CompilerError("", 0, 0, errorMessage));
+                        continue;
+                    }
+
+                    LLVM.AddGlobal(module, llvmMemberType.Value, fullyQualifiedName);
+                }
+
+                List<KeyValuePair<string, ClepsType>> allMethods = classDetails.MemberMethods.Union(classDetails.StaticMemberMethods).ToList();
+
+                foreach (KeyValuePair<string, ClepsType> functionNameAndDetails in allMethods)
                 {
                     string functionName = functionNameAndDetails.Key;
                     ClepsType functionDetails = functionNameAndDetails.Value;
 
                     string fullyQualifiedName = String.Format("{0}.{1}", className, functionName);
-                    LLVMTypeRef llvmReturnType = ClepsLLVMTypeConvertor.GetPrimitiveLLVMTypeOrNull(functionDetails.FunctionReturnType).Value;
-                    LLVMTypeRef[] llvmParameterTypes = functionDetails.FunctionParameters.Select(c => ClepsLLVMTypeConvertor.GetPrimitiveLLVMTypeOrNull(c).Value).ToArray();
-                    LLVMTypeRef funcType = LLVM.FunctionType(llvmReturnType, llvmParameterTypes, false);
+                    LLVMTypeRef? llvmReturnType = clepsLLVMTypeConvertor.GetPrimitiveLLVMTypeOrNull(functionDetails.FunctionReturnType);
+
+                    if (llvmReturnType == null)
+                    {
+                        string errorMessage = String.Format("Type {0} was not found", functionDetails.FunctionReturnType.GetTypeName());
+                        status.AddError(new CompilerError("", 0, 0, errorMessage));
+                        continue;
+                    }
+
+                    bool staticMethodLLVMTypesFound;
+                    LLVMTypeRef[] llvmParameterTypes = GetLLVMTypesArrFromClepsTypesList(clepsLLVMTypeConvertor, functionDetails.FunctionParameters, status, out staticMethodLLVMTypesFound);
+
+                    if (!staticMethodLLVMTypesFound)
+                    {
+                        //move on to the next function
+                        continue;
+                    }
+
+                    LLVMTypeRef funcType = LLVM.FunctionType(llvmReturnType.Value, llvmParameterTypes, false);
                     LLVMValueRef newFunc = LLVM.AddFunction(module, fullyQualifiedName, funcType);
 
                     LLVMBasicBlockRef blockRef = LLVM.AppendBasicBlock(newFunc, "entry");
                     LLVM.PositionBuilderAtEnd(builder, blockRef);
 
                     List<LLVMValueRef> paramValueRegisters = newFunc.GetParams().ToList();
-
-                    //Debug.Assert(paramNames.Count() == llvmParameterTypes.Count());
-                    //Debug.Assert(paramNames.Count() == paramValueRegisters.Count());
                 }
             }
+        }
+
+        private LLVMTypeRef[] GetLLVMTypesArrFromClepsTypesList(ClepsLLVMTypeConvertor clepsLLVMTypeConvertor, List<ClepsType> list, CompileStatus status, out bool typesFound)
+        {
+            List<LLVMTypeRef> memberTypes = new List<LLVMTypeRef>(list.Count);
+            typesFound = true;
+
+            foreach (ClepsType clepsMemberType in list)
+            {
+                LLVMTypeRef? llvmMemberType = clepsLLVMTypeConvertor.GetPrimitiveLLVMTypeOrNull(clepsMemberType);
+                if (llvmMemberType == null)
+                {
+                    string errorMessage = String.Format("Type {0} was not found", clepsMemberType.GetTypeName());
+                    status.AddError(new CompilerError("", 0, 0, errorMessage));
+                    typesFound = false;
+                    break;
+                }
+
+                memberTypes.Add(llvmMemberType.Value);
+            }
+
+            return memberTypes.ToArray();
         }
 
         private void ParseFilesWithGenerator<T>(ClepsAbstractParser<T> generator, CompileStatus status)

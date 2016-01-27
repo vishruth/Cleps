@@ -21,7 +21,8 @@ FOR : 'for';
 DO : 'do';
 WHILE : 'while';
 RETURN : 'return';
-ASSIGNMENT : '=';
+ASSIGNMENT : 'assignment';
+ASSIGNMENT_OPERATOR : '=';
 ID : [a-zA-Z] [a-zA-Z0-9_]*;
 NUMERIC : [0-9]+ ('.' [0-9]+)? ID?;
 STRING : ID? '"' ('\\"'|.)*? '"'
@@ -51,7 +52,7 @@ classBodyStatements :
 	|	memberDeclarationStatement
 )*;
 
-typename : '$' RawTypeName=nestedIdentifier '!'?;
+typename : '$' RawTypeName=nestedIdentifier (PtrIndirectionLevel+='*')* '!'?;
 typenameAndVoid : typename | VOID;
 
 ///////////////////////////////////////////////////////
@@ -61,7 +62,7 @@ memberDeclarationStatement : visibilityModifier STATIC? declarationStatement;
 declarationStatement : memberVariableDeclarationStatement | memberFunctionDeclarationStatement;
 
 memberVariableDeclarationStatement : variableDeclarationStatement;
-memberFunctionDeclarationStatement : functionDeclarationStatement;
+memberFunctionDeclarationStatement : functionDeclarationStatement | assignmentFunctionDeclarationStatement;
 
 ///////////////////////////////////////////////////////
 
@@ -93,11 +94,13 @@ functionStatement : functionReturnStatement | functionVariableDeclarationStateme
 functionReturnStatement : RETURN rightHandExpression? END;
 
 functionVariableDeclarationStatement : variableDeclarationStatement;
-variableDeclarationStatement : typename VariableName=ID (ASSIGNMENT rightHandExpression)? END;
-functionVariableAssigmentStatement : VariableName=ID ASSIGNMENT rightHandExpression END;
-functionFieldAssignmentStatement : LeftExpression=rightHandExpression '.' VariableName=ID ASSIGNMENT RightExpression=rightHandExpression END;
+variableDeclarationStatement : typename VariableName=ID (ASSIGNMENT_OPERATOR rightHandExpression)? END;
+functionVariableAssigmentStatement : VariableName=ID ASSIGNMENT_OPERATOR rightHandExpression END;
+functionFieldAssignmentStatement : LeftExpression=rightHandExpression '.' VariableName=ID ASSIGNMENT_OPERATOR RightExpression=rightHandExpression END;
 
-functionDeclarationStatement : FUNC FunctionName=ID (ASSIGNMENT FUNC FunctionReturnType=typenameAndVoid '(' functionParametersList ')' statementBlock)? END;
+functionDeclarationStatement : FUNC FunctionName=ID (ASSIGNMENT_OPERATOR FUNC FunctionReturnType=typenameAndVoid '(' functionParametersList ')' statementBlock)? END;
+assignmentFunctionDeclarationStatement : ASSIGNMENT FunctionName=ASSIGNMENT_OPERATOR FUNC FunctionReturnType=typenameAndVoid '(' functionParametersList ')' statementBlock END;
+
 functionParametersList : (FunctionParameterTypes+=typename FunctionParameterNames+=nestedIdentifier (',' FunctionParameterTypes+=typename FunctionParameterNames+=nestedIdentifier)*)?;
 statementBlock : '{' functionStatement* '}';
 

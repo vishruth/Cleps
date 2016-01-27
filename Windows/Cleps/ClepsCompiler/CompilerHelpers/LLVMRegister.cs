@@ -13,11 +13,6 @@ namespace ClepsCompiler.CompilerHelpers
     class LLVMRegister
     {
         /// <summary>
-        /// The name of the variable initialized
-        /// </summary>
-        public string VariableName { get; private set; }
-
-        /// <summary>
         /// The cleps type of the variable initialized
         /// </summary>
         public ClepsType VariableType { get; private set; }
@@ -27,9 +22,8 @@ namespace ClepsCompiler.CompilerHelpers
         /// </summary>
         public LLVMValueRef LLVMValueRef { get; private set; }
 
-        public LLVMRegister(string variableName, ClepsType variableType, LLVMValueRef llvmValueRef)
+        public LLVMRegister(ClepsType variableType, LLVMValueRef llvmValueRef)
         {
-            VariableName = variableName;
             VariableType = variableType;
             LLVMValueRef = llvmValueRef;
         }
