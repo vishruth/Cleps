@@ -75,8 +75,11 @@ namespace ClepsCompiler.CompilerHelpers
 
             if (IsFunctionType)
             {
-                //TODO: Make more robust
-                return FunctionReturnType.GetHashCode();
+                //Recommended approach in effective java book and java and android docs
+                int result = 17;
+                result = result * 31 + FunctionReturnType.GetHashCode();
+                FunctionParameters.ForEach(p => result = result * 31 + p.GetHashCode());
+                return result;
             }
 
             if (IsBasicType)

@@ -63,10 +63,10 @@
     <Compile Include="CompilerHelpers\ClepsLLVMTypeConvertor.cs" />
     <Compile Include="CompilerHelpers\ClepsType.cs" />
     <Compile Include="CompilerHelpers\VariableManager.cs" />
-    <Compile Include="Compiler\ClepsClassNamesParser.cs" />
+    <Compile Include="Compiler\ClepsClassNamesGeneratorParser.cs" />
     <Compile Include="Compiler\ClepsFunctionBodyGeneratorParser.cs" />
     <Compile Include="Compiler\ClepsAbstractParser.cs" />
-    <Compile Include="Compiler\ClepsMemberParser.cs" />
+    <Compile Include="Compiler\ClepsMemberGeneratorParser.cs" />
     <Compile Include="Compiler\CompilerDriver.cs" />
     <Compile Include="Compiler\CompilerError.cs" />
     <Compile Include="Compiler\CompilerErrorException.cs" />

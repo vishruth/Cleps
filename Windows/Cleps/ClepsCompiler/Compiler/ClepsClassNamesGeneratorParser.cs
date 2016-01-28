@@ -13,17 +13,26 @@ namespace ClepsCompiler.Compiler
     /// <summary>
     /// This parser is used to generate a list of classes defined in the code
     /// </summary>
-    class ClepsClassNamesParser : ClepsAbstractParser<int>
+    class ClepsClassNamesGeneratorParser : ClepsAbstractParser<int>
     {
         private ClassManager ClassManager;
         private CompileStatus Status;
+        private LLVMContextRef Context;
+        private LLVMModuleRef Module;
+        private LLVMBuilderRef Builder;
+        private Dictionary<string, LLVMTypeRef> ClassSkeletons;
 
         private List<string> CurrentNamespaceAndClass;
 
-        public ClepsClassNamesParser(ClassManager classManager, CompileStatus status)
+        public ClepsClassNamesGeneratorParser(ClassManager classManager, CompileStatus status, LLVMContextRef context, LLVMModuleRef module, LLVMBuilderRef builder, out Dictionary<string, LLVMTypeRef> classSkeletons)
         {
             ClassManager = classManager;
             Status = status;
+            Context = context;
+            Module = module;
+            Builder = builder;
+            classSkeletons = new Dictionary<string, LLVMTypeRef>();
+            ClassSkeletons = classSkeletons;
         }
 
         public override int VisitCompilationUnit([NotNull] ClepsParser.CompilationUnitContext context)
@@ -56,6 +65,8 @@ namespace ClepsCompiler.Compiler
                 return -1;
             }
 
+            LLVMTypeRef structType = LLVM.StructCreateNamed(Context, className);
+            ClassSkeletons[className] = structType;
             ClassManager.AddNewClass(className);
 
             CurrentNamespaceAndClass.RemoveAt(CurrentNamespaceAndClass.Count - 1);

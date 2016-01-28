@@ -19,7 +19,7 @@ namespace ClepsCompiler.Compiler
         public CompilerError(string errorSourceFile, long errorLineNumber, long errorPositionInLine, string errorMessage)
         {
             ErrorSourceFile = errorSourceFile;
-            ErrorPositionInLine = errorLineNumber;
+            ErrorLineNumber = errorLineNumber;
             ErrorPositionInLine = errorPositionInLine;
             ErrorMessage = errorMessage;
         }

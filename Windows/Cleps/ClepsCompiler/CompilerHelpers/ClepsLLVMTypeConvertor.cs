@@ -44,8 +44,14 @@ namespace ClepsCompiler.CompilerHelpers
             }
             else
             {
-                return GetPtrToLLVMType(ClassSkeletons[identifierText], indirectionLevel);
+                LLVMTypeRef ret;
+                if(ClassSkeletons.TryGetValue(identifierText, out ret))
+                {
+                    return GetPtrToLLVMType(ClassSkeletons[identifierText], indirectionLevel);
+                }
             }
+
+            return null;
         }
 
         public static ClepsType GetClepsType(LLVMTypeRef llvmType)

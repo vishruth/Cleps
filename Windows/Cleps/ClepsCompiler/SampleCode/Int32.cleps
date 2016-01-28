@@ -17,7 +17,7 @@
 
 	public class MainProgram
 	{
-		public static fn Test = fn $System.LLVMTypes.I1 ($System.LLVMTypes.I1 param1)
+		public static fn Test = fn $System.LLVMTypes.I1 ($System.LLVMTypes.I1 param1, $System.LLVMTypes.Iasdasd1 paradm1)
 		{
 			$System.Types.Int32 testVar;
 			return false;
