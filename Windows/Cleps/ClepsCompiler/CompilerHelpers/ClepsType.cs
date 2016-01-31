@@ -14,6 +14,7 @@ namespace ClepsCompiler.CompilerHelpers
         public bool IsVoidType { get; private set; }
         public bool IsFunctionType { get; private set; }
         public bool IsBasicType { get; private set; }
+        public bool IsPointerType { get; private set; }
 
         public string RawTypeName { get; private set; }
         public int PtrIndirectionLevel { get; private set; }
@@ -97,6 +98,7 @@ namespace ClepsCompiler.CompilerHelpers
                 IsFunctionType = false,
                 IsVoidType = false,
                 IsBasicType = true,
+                IsPointerType = ptrIndirectionLevel > 0,
                 RawTypeName = rawTypeName,
                 PtrIndirectionLevel = ptrIndirectionLevel
             };
@@ -123,7 +125,8 @@ namespace ClepsCompiler.CompilerHelpers
             {
                 IsFunctionType = false,
                 IsVoidType = true,
-                IsBasicType = false
+                IsBasicType = false,
+                IsPointerType = false
             };
         }
 
@@ -144,6 +147,7 @@ namespace ClepsCompiler.CompilerHelpers
                 IsFunctionType = true,
                 IsVoidType = false,
                 IsBasicType = false,
+                IsPointerType = false,
                 FunctionReturnType = functionReturnType,
                 FunctionParameters = functionParameters
             };

@@ -6,3 +6,4 @@ This project uses several other projects either as libraries or tools that each 
 
 LLVM toolset - University of Illinois/NCSA Open Source License
 Antlr - BSD 3-Clause License
+Dotmore OrderedDictionary implementation - MIT License

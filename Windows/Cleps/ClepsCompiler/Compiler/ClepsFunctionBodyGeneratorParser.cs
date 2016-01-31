@@ -59,34 +59,58 @@ namespace ClepsCompiler.Compiler
             return ret;
         }
 
-        public override LLVMRegister VisitAssignmentFunctionDeclarationStatement([NotNull] ClepsParser.AssignmentFunctionDeclarationStatementContext context)
+        public override LLVMRegister VisitMemberDeclarationStatement([NotNull] ClepsParser.MemberDeclarationStatementContext context)
+        {
+            bool isStatic = context.STATIC() != null;
+            ClepsParser.MemberFunctionDeclarationStatementContext memberDecarationContext = context.declarationStatement().memberFunctionDeclarationStatement();
+
+            if (memberDecarationContext == null)
+            {
+                return null;
+            }
+
+            var assignmentFunctionDeclarationStatement = memberDecarationContext.assignmentFunctionDeclarationStatement();
+            var functionDeclarationContext = memberDecarationContext.functionDeclarationStatement();
+
+            if (assignmentFunctionDeclarationStatement != null)
+            {
+                return VisitAssignmentFunctionDeclarationStatement(assignmentFunctionDeclarationStatement, isStatic);
+            }
+            else
+            {
+                return VisitFunctionDeclarationStatement(functionDeclarationContext, isStatic);
+            }
+        }
+
+        private LLVMRegister VisitAssignmentFunctionDeclarationStatement([NotNull] ClepsParser.AssignmentFunctionDeclarationStatementContext context, bool isStatic)
         {
             ClepsParser.TypenameAndVoidContext returnTypeContext = context.FunctionReturnType;
             ClepsParser.FunctionParametersListContext parametersContext = context.functionParametersList();
             string functionName = context.FunctionName.Text;
-            return ImplementFunctionBody(context, returnTypeContext, parametersContext, functionName);
+            return VisitFunctionDeclarationBody(context, returnTypeContext, parametersContext, functionName, isStatic);
         }
 
-        public override LLVMRegister VisitFunctionDeclarationStatement([NotNull] ClepsParser.FunctionDeclarationStatementContext context)
+        private LLVMRegister VisitFunctionDeclarationStatement([NotNull] ClepsParser.FunctionDeclarationStatementContext context, bool isStatic)
         {
             ClepsParser.TypenameAndVoidContext returnTypeContext = context.FunctionReturnType;
             ClepsParser.FunctionParametersListContext parametersContext = context.functionParametersList();
             string functionName = context.FunctionName.Text;
-            return ImplementFunctionBody(context, returnTypeContext, parametersContext, functionName);
+            return VisitFunctionDeclarationBody(context, returnTypeContext, parametersContext, functionName, isStatic);
         }
 
-        private LLVMRegister ImplementFunctionBody<T>
+        private LLVMRegister VisitFunctionDeclarationBody
         (
-            T context, 
-            ClepsParser.TypenameAndVoidContext returnTypeContext, 
-            ClepsParser.FunctionParametersListContext parametersContext, 
-            string functionName
-        ) where T : Antlr4.Runtime.ParserRuleContext
+            Antlr4.Runtime.ParserRuleContext context,
+            ClepsParser.TypenameAndVoidContext returnTypeContext,
+            ClepsParser.FunctionParametersListContext parametersContext,
+            string functionName,
+            bool isStatic
+        )
         {
             string className = String.Join(".", CurrentNamespaceAndClass);
             string fullyQualifiedName = String.Format("{0}.{1}", className, functionName);
 
-            if(!ClassManager.DoesClassContainMember(className, functionName))
+            if (!ClassManager.DoesClassContainMember(className, functionName))
             {
                 string errorMessage = String.Format("Class {0} does not have a definition for {1}", className, functionName);
                 Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
@@ -98,13 +122,20 @@ namespace ClepsCompiler.Compiler
             LLVMBasicBlockRef basicBlock = LLVM.GetFirstBasicBlock(currFunc);
             LLVM.PositionBuilderAtEnd(Builder, basicBlock);
 
+            VariableManager.AddBlock();
+
             ClepsType clepsReturnType = ClepsType.GetBasicOrVoidType(returnTypeContext);
+            List<string> paramNames = parametersContext._FunctionParameterNames.Select(p => p.GetText()).ToList();
             List<ClepsType> clepsParameterTypes = parametersContext._FunctionParameterTypes.Select(t => ClepsType.GetBasicType(t)).ToList();
 
-            List<string> paramNames = parametersContext._FunctionParameterNames.Select(p => p.GetText()).ToList();
-            List<LLVMValueRef> paramValueRegisters = currFunc.GetParams().ToList();
+            if (!isStatic)
+            {
+                ClepsType thisClassType = ClepsType.GetBasicType(className, 1);
+                paramNames.Insert(0, "this");
+                clepsParameterTypes.Insert(0, thisClassType);
+            }
 
-            VariableManager.AddBlock();
+            List<LLVMValueRef> paramValueRegisters = currFunc.GetParams().ToList();
 
             paramNames.Zip(clepsParameterTypes, (ParamName, ParamType) => new { ParamName, ParamType })
                 .Zip(paramValueRegisters, (ParamNameAndType, ParamRegister) => new { ParamNameAndType.ParamName, ParamNameAndType.ParamType, ParamRegister })

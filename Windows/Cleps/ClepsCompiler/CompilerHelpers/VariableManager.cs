@@ -39,7 +39,7 @@ namespace ClepsCompiler.CompilerHelpers
 
         public LLVMRegister GetVariable(string variableName)
         {
-            var localVariablesBlockWithVar = LocalVariableBlocks.Where(b => b.ContainsKey(variableName)).FirstOrDefault();
+            var localVariablesBlockWithVar = LocalVariableBlocks.Where(b => b.ContainsKey(variableName)).LastOrDefault();
             Debug.Assert(localVariablesBlockWithVar != null);
             LLVMRegister ret = localVariablesBlockWithVar[variableName];
             return ret;
@@ -47,7 +47,7 @@ namespace ClepsCompiler.CompilerHelpers
 
         public void SetLLVMRegister(string variableName, ClepsType variableType, LLVMValueRef llvmValueRef)
         {
-            var localVariablesBlockWithVar = LocalVariableBlocks.Where(b => b.ContainsKey(variableName)).FirstOrDefault();
+            var localVariablesBlockWithVar = LocalVariableBlocks.Where(b => b.ContainsKey(variableName)).LastOrDefault();
             Debug.Assert(localVariablesBlockWithVar != null);
             
             LLVMRegister ret = localVariablesBlockWithVar[variableName];

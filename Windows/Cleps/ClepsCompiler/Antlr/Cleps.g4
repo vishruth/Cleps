@@ -72,7 +72,7 @@ rightHandExpression :
 	| rightHandExpression OPERATOR rightHandExpression # BinaryOperatorOnExpression
 	| rightHandExpression OPERATOR # PostOperatorOnExpression
 	| rightHandExpression '.' functionCall # FunctionCallOnExpression
-	| rightHandExpression '.' ID # FieldAccessOnExpression
+	| rightHandExpression '.' FieldName=ID # FieldAccessOnExpression
 	| '(' rightHandExpression ')' # BracketedExpression;
 
 rightHandExpressionSimple : stringAssignments | numericAssignments | nullAssignment | booleanAssignments | functionCallAssignment | variableAssignment | typenameAssignment | classInstanceAssignment;
@@ -96,7 +96,7 @@ functionReturnStatement : RETURN rightHandExpression? END;
 functionVariableDeclarationStatement : variableDeclarationStatement;
 variableDeclarationStatement : typename VariableName=ID (ASSIGNMENT_OPERATOR rightHandExpression)? END;
 functionVariableAssigmentStatement : VariableName=ID ASSIGNMENT_OPERATOR rightHandExpression END;
-functionFieldAssignmentStatement : LeftExpression=rightHandExpression '.' VariableName=ID ASSIGNMENT_OPERATOR RightExpression=rightHandExpression END;
+functionFieldAssignmentStatement : LeftExpression=rightHandExpression '.' FieldName=ID ASSIGNMENT_OPERATOR RightExpression=rightHandExpression END;
 
 functionDeclarationStatement : FUNC FunctionName=ID (ASSIGNMENT_OPERATOR FUNC FunctionReturnType=typenameAndVoid '(' functionParametersList ')' statementBlock)? END;
 assignmentFunctionDeclarationStatement : ASSIGNMENT FunctionName=ASSIGNMENT_OPERATOR FUNC FunctionReturnType=typenameAndVoid '(' functionParametersList ')' statementBlock END;

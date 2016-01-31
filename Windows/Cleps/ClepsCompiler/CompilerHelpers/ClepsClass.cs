@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ClepsCompiler.Utils.Collections;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -13,14 +14,14 @@ namespace ClepsCompiler.CompilerHelpers
     class ClepsClass
     {
         public string FullyQualifiedName { get; private set; }
-        public Dictionary<string, ClepsType> MemberVariables { get; private set; }
+        public OrderedDictionary<string, ClepsType> MemberVariables { get; private set; }
         public Dictionary<string, ClepsType> MemberMethods { get; private set; }
         public Dictionary<string, ClepsType> StaticMemberVariables { get; private set; }
         public Dictionary<string, ClepsType> StaticMemberMethods { get; private set; }
 
         public ClepsClass()
         {
-            MemberVariables = new Dictionary<string, ClepsType>();
+            MemberVariables = new OrderedDictionary<string, ClepsType>();
             MemberMethods = new Dictionary<string, ClepsType>();
             StaticMemberVariables = new Dictionary<string, ClepsType>();
             StaticMemberMethods = new Dictionary<string, ClepsType>();

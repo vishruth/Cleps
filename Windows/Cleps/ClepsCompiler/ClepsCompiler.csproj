@@ -75,6 +75,12 @@
     <Compile Include="CompilerHelpers\LLVMRegister.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Utils\Collections\Comparer2.cs" />
+    <Compile Include="Utils\Collections\DictionaryEnumerator.cs" />
+    <Compile Include="Utils\Collections\IOrderedDictionary.cs" />
+    <Compile Include="Utils\Collections\KeyedCollection2.cs" />
+    <Compile Include="Utils\Collections\OrderedDictionary.cs" />
+    <Compile Include="Utils\Collections\OrderedDictionaryDebug.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Antlr\Cleps.g4" />
