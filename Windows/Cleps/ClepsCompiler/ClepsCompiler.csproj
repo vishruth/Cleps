@@ -86,7 +86,8 @@
     <None Include="Antlr\Cleps.g4" />
     <None Include="App.config" />
     <None Include="packages.config" />
-    <None Include="SampleCode\Int32.cleps" />
+    <None Include="SampleCode\TestProgram.cleps" />
+    <None Include="StandardLibrary\CoreLibrary.cleps" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

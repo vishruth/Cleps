@@ -18,9 +18,11 @@ namespace ClepsCompiler.CompilerHelpers
         public Dictionary<string, ClepsType> MemberMethods { get; private set; }
         public Dictionary<string, ClepsType> StaticMemberVariables { get; private set; }
         public Dictionary<string, ClepsType> StaticMemberMethods { get; private set; }
+        public ClepsType RawLLVMTypeMap { get; private set; }
 
-        public ClepsClass()
+        public ClepsClass(string name)
         {
+            FullyQualifiedName = name;
             MemberVariables = new OrderedDictionary<string, ClepsType>();
             MemberMethods = new Dictionary<string, ClepsType>();
             StaticMemberVariables = new Dictionary<string, ClepsType>();
@@ -59,6 +61,12 @@ namespace ClepsCompiler.CompilerHelpers
                     MemberMethods.Add(memberName, memberType);
                 }
             }
+        }
+
+        public void AddRawLLVMTypeMapping(ClepsType rawLLVMTypeMap)
+        {
+            Debug.Assert(RawLLVMTypeMap == null);
+            RawLLVMTypeMap = rawLLVMTypeMap;
         }
     }
 }

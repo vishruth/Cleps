@@ -48,11 +48,13 @@ namespace ClepsCompiler
             ProgramParameters programParams = new ProgramParameters { Files = new List<string>(args), OutputFile = "outputFile.exe"};
             if (programParams.Files.Count == 0)
             {
-                string testFileName = @"..\..\SampleCode\Int32.cleps";
-                string fullPath = Path.GetFullPath(testFileName);
-                if (File.Exists(testFileName))
+                string testFileName = @"..\..\StandardLibrary\CoreLibrary.cleps";
+                string testFileName2 = @"..\..\SampleCode\TestProgram.cleps";
+
+                if (File.Exists(testFileName) && File.Exists(testFileName2))
                 {
                     programParams.Files.Add(testFileName);
+                    programParams.Files.Add(testFileName2);
                 }
             }
 

@@ -1,4 +1,5 @@
-﻿using Antlr4.Runtime.Misc;
+﻿using Antlr4.Runtime;
+using Antlr4.Runtime.Misc;
 using ClepsCompiler.CompilerHelpers;
 using LLVMSharp;
 using System;
@@ -197,20 +198,62 @@ namespace ClepsCompiler.Compiler
             }
 
             ClepsType clepsVariableType = ClepsType.GetBasicType(variableDeclarationStatement.typename());
-            LLVMTypeRef? llvmVariableType = ClepsLLVMTypeConvertorInst.GetPrimitiveLLVMTypeOrNull(clepsVariableType);
+            LLVMTypeRef? primitiveTypeOrNull = ClepsLLVMTypeConvertorInst.GetPrimitiveLLVMTypeOrNull(clepsVariableType);
+            LLVMValueRef variable;
 
-            if(llvmVariableType == null)
+            if (primitiveTypeOrNull != null)
             {
-                string errorMessage = String.Format("Type {0} was not found", clepsVariableType.GetTypeName());
+                variable = CreateVariableOnStack(variableName, primitiveTypeOrNull.Value);
+            }
+            else if (clepsVariableType.IsPointerType)
+            {
+                LLVMTypeRef? pointerType = ClepsLLVMTypeConvertorInst.GetLLVMTypeOrNull(clepsVariableType);
+                if(pointerType == null)
+                {
+                    string errorMessage = String.Format("Could not find type {0}", clepsVariableType.GetTypeName());
+                    Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
+                    return null;
+                }
+
+                variable = CreateVariableOnStack(variableName, pointerType.Value);
+            }
+            else
+            {
+                LLVMValueRef? constructorReturn = CallConstructorForType(context, clepsVariableType, variableName);
+                if(constructorReturn == null)
+                {
+                    return null;
+                }
+
+                variable = constructorReturn.Value;
+            }
+
+            VariableManager.AddLocalVariable(variableName, clepsVariableType, variable);
+            LLVMRegister ret = new LLVMRegister(clepsVariableType, variable);
+            return ret;
+        }
+
+        private LLVMValueRef CreateVariableOnStack(string variableName, LLVMTypeRef variableType)
+        {
+            LLVMValueRef variablePtr = LLVM.BuildAlloca(Builder, variableType, variableName + "Ptr");
+            LLVMValueRef variable = LLVM.BuildLoad(Builder, variablePtr, variableName);
+            return variable;
+        }
+
+        private LLVMValueRef? CallConstructorForType(ParserRuleContext context, ClepsType clepsVariableType, string variableName)
+        {
+            string constructorToCall = String.Format("{0}.new", clepsVariableType.RawTypeName);
+            if (!ClassManager.IsClassLoaded(clepsVariableType.RawTypeName))
+            {
+                string errorMessage = String.Format("Could not find type {0}", clepsVariableType.GetTypeName());
                 Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
                 return null;
             }
 
-            LLVMValueRef variablePtr = LLVM.BuildAlloca(Builder, llvmVariableType.Value, variableName);
-            VariableManager.AddLocalVariable(variableName, clepsVariableType, variablePtr);
-            LLVMRegister ret = new LLVMRegister(clepsVariableType, variablePtr);
-
-            return ret;
+            LLVMValueRef llvmConstructor = LLVM.GetNamedFunction(Module, constructorToCall);
+            LLVMValueRef variablePtr = LLVM.BuildCall(Builder, llvmConstructor, new LLVMValueRef[0], variableName + "Ptr");
+            LLVMValueRef variable = LLVM.BuildLoad(Builder, variablePtr, variableName);
+            return variable;
         }
 
         #endregion Function Statement Implementations
@@ -237,8 +280,8 @@ namespace ClepsCompiler.Compiler
                 throw new Exception(String.Format("Numeric value {0} not a valid int", valueString));
             }
 
-            LLVMTypeRef llvmType = LLVM.Int32Type();
-            ClepsType clepsType = ClepsLLVMTypeConvertor.GetClepsType(llvmType);
+            LLVMTypeRef llvmType = LLVM.Int32TypeInContext(Context);
+            ClepsType clepsType = ClepsLLVMTypeConvertorInst.GetClepsType(llvmType);
             LLVMValueRef register = LLVM.ConstInt(llvmType, value, false);
             LLVMRegister ret = new LLVMRegister(clepsType, register);
             return ret;
@@ -248,10 +291,37 @@ namespace ClepsCompiler.Compiler
         {
             bool boolValue = context.TRUE() != null;
             ulong value = boolValue ? 1u : 0u;
-            LLVMTypeRef llvmType = LLVM.Int1Type();
-            ClepsType clepsType = ClepsLLVMTypeConvertor.GetClepsType(llvmType);
+            LLVMTypeRef llvmType = LLVM.Int1TypeInContext(Context);
+            ClepsType clepsType = ClepsLLVMTypeConvertorInst.GetClepsNativeLLVMType(llvmType);
+
+            ClepsClass mappedClass;
+            if (!ClassManager.RawLLVMTypeMappingClasses.TryGetValue(clepsType, out mappedClass))
+            {
+                string errorMessage = String.Format("Could not find a raw mapping for type {0}", clepsType.GetTypeName());
+                Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
+                return null;
+            }
+
             LLVMValueRef register = LLVM.ConstInt(llvmType, value, false);
-            LLVMRegister ret = new LLVMRegister(clepsType, register);
+            ClepsType mappedClassType = ClepsType.GetBasicType(mappedClass.FullyQualifiedName, 0);
+
+            LLVMValueRef? constructorReturn = CallConstructorForType(context, mappedClassType, "boolInst");
+            if (constructorReturn == null)
+            {
+                return null;
+            }
+
+            LLVMValueRef boolInst = constructorReturn.Value;
+            LLVMValueRef boolInstPtr = LLVM.BuildAlloca(Builder, LLVM.TypeOf(boolInst), "boolInstPtr");
+            LLVM.BuildStore(Builder, boolInst, boolInstPtr);
+
+            //the mapped type is always the first field
+            LLVMValueRef boolInstField = LLVM.BuildStructGEP(Builder, boolInstPtr, 0, "boolInstField");
+            LLVMTypeRef boolInstFieldType = LLVM.TypeOf(boolInstField);
+
+            LLVM.BuildStore(Builder, register, boolInstField);
+
+            LLVMRegister ret = new LLVMRegister(mappedClassType, boolInst);
             return ret;
         }
 

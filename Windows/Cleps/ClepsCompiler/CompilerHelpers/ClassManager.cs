@@ -15,11 +15,13 @@ namespace ClepsCompiler.CompilerHelpers
     {
         public Dictionary<string, ClepsClass> LoadedClassesAndMembers { get; private set; }
         public List<string> MainFunctionFullNames { get; private set; }
+        public Dictionary<ClepsType, ClepsClass> RawLLVMTypeMappingClasses { get; private set; }
 
         public ClassManager()
         {
             LoadedClassesAndMembers = new Dictionary<string, ClepsClass>();
             MainFunctionFullNames = new List<string>();
+            RawLLVMTypeMappingClasses = new Dictionary<ClepsType, ClepsClass>();
         }
 
         public bool IsClassLoaded(string className)
@@ -30,7 +32,7 @@ namespace ClepsCompiler.CompilerHelpers
         public void AddNewClass(string className)
         {
             Debug.Assert(!LoadedClassesAndMembers.ContainsKey(className));
-            LoadedClassesAndMembers.Add(className, new ClepsClass());
+            LoadedClassesAndMembers.Add(className, new ClepsClass(className));
         }
 
         public bool DoesClassContainMember(string className, string memberName)
@@ -54,6 +56,25 @@ namespace ClepsCompiler.CompilerHelpers
                 string fullyQualifiedName = className + "." + memberName;
                 MainFunctionFullNames.Add(fullyQualifiedName);
             }
+        }
+
+        public bool ClassContainsRawLLVMTypeMapping(string className)
+        {
+            Debug.Assert(LoadedClassesAndMembers.ContainsKey(className));
+            return LoadedClassesAndMembers[className].RawLLVMTypeMap != null;
+        }
+
+        public bool RawLLVMTypeMappingExists(ClepsType rawLLVMTypeMap)
+        {
+            return RawLLVMTypeMappingClasses.ContainsKey(rawLLVMTypeMap);
+        }
+
+        public void AddRawLLVMTypeMapping(string className, ClepsType rawLLVMTypeMap)
+        {
+            Debug.Assert(LoadedClassesAndMembers.ContainsKey(className));
+            Debug.Assert(!RawLLVMTypeMappingClasses.ContainsKey(rawLLVMTypeMap));
+            RawLLVMTypeMappingClasses.Add(rawLLVMTypeMap, LoadedClassesAndMembers[className]);
+            LoadedClassesAndMembers[className].AddRawLLVMTypeMapping(rawLLVMTypeMap);
         }
     }
 }

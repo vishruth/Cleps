@@ -32,8 +32,8 @@ namespace ClepsCompiler.Compiler
             CompileStatus status = new CompileStatus(false /* exit on first error */);
 
             LLVMContextRef context = LLVM.ContextCreate();
-            LLVMModuleRef module = LLVM.ModuleCreateWithName(OutputFileName);
-            LLVMBuilderRef builder = LLVM.CreateBuilder();
+            LLVMModuleRef module = LLVM.ModuleCreateWithNameInContext(OutputFileName, context);
+            LLVMBuilderRef builder = LLVM.CreateBuilderInContext(context);
 
             try
             {
@@ -47,7 +47,7 @@ namespace ClepsCompiler.Compiler
                     ParseFilesWithGenerator(classSkeletonGenerator, status);
                 }
 
-                ClepsLLVMTypeConvertor clepsLLVMTypeConvertor = new ClepsLLVMTypeConvertor(classSkeletons);
+                ClepsLLVMTypeConvertor clepsLLVMTypeConvertor = new ClepsLLVMTypeConvertor(classSkeletons, context);
 
                 {
                     ClepsMemberGeneratorParser memberGenerator = new ClepsMemberGeneratorParser(classManager, status, context, module, builder, clepsLLVMTypeConvertor);
@@ -100,7 +100,7 @@ namespace ClepsCompiler.Compiler
 
         private void AddEntryPoint(ClassManager classManager, CompileStatus status, LLVMContextRef context, LLVMModuleRef module, LLVMBuilderRef builder)
         {
-            LLVMTypeRef functionType = LLVM.FunctionType(LLVM.Int32Type(), new LLVMTypeRef[] { }, false);
+            LLVMTypeRef functionType = LLVM.FunctionType(LLVM.Int32TypeInContext(context), new LLVMTypeRef[] { }, false);
             LLVMValueRef functionValue = LLVM.AddFunction(module, "main", functionType);
             LLVMBasicBlockRef blockValue = LLVM.AppendBasicBlockInContext(context, functionValue, "entry");
             LLVM.PositionBuilderAtEnd(builder, blockValue);

@@ -21,6 +21,7 @@ FOR : 'for';
 DO : 'do';
 WHILE : 'while';
 RETURN : 'return';
+RAWTYPEMAP : 'rawtypemap';
 ASSIGNMENT : 'assignment';
 ASSIGNMENT_OPERATOR : '=';
 ID : [a-zA-Z] [a-zA-Z0-9_]*;
@@ -50,10 +51,13 @@ classBodyStatements :
 (
 		classDeclarationStatements
 	|	memberDeclarationStatement
+	|	rawTypeMapStatment
 )*;
 
 typename : '$' RawTypeName=nestedIdentifier (PtrIndirectionLevel+='*')* '!'?;
 typenameAndVoid : typename | VOID;
+
+rawTypeMapStatment : RAWTYPEMAP typename END;
 
 ///////////////////////////////////////////////////////
 

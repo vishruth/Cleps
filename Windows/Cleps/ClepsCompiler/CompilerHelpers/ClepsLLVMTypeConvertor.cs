@@ -13,22 +13,24 @@ namespace ClepsCompiler.CompilerHelpers
     class ClepsLLVMTypeConvertor
     {
         private Dictionary<string, LLVMTypeRef> ClassSkeletons;
+        private LLVMContextRef Context;
 
-        public ClepsLLVMTypeConvertor(Dictionary<string, LLVMTypeRef> classSkeletons)
+        public ClepsLLVMTypeConvertor(Dictionary<string, LLVMTypeRef> classSkeletons, LLVMContextRef context)
         {
+            Context = context;
             ClassSkeletons = classSkeletons;
         }
 
         public LLVMTypeRef? GetPrimitiveLLVMTypeOrNull(ClepsType clepsType)
         {
-            if(clepsType.IsFunctionType)
+            if (clepsType.IsFunctionType)
             {
                 throw new Exception("Cannot convert function cleps type to llvm type");
             }
 
             if (clepsType.IsVoidType)
             {
-                return LLVM.VoidType();
+                return LLVM.VoidTypeInContext(Context);
             }
 
             string identifierText = clepsType.RawTypeName;
@@ -36,25 +38,38 @@ namespace ClepsCompiler.CompilerHelpers
 
             if (identifierText == "System.LLVMTypes.I1")
             {
-                return GetPtrToLLVMType(LLVM.Int1Type(), indirectionLevel);
+                return GetPtrToLLVMType(LLVM.Int1TypeInContext(Context), indirectionLevel);
             }
             else if (identifierText == "System.LLVMTypes.I32")
             {
-                return GetPtrToLLVMType(LLVM.Int32Type(), indirectionLevel);
-            }
-            else
-            {
-                LLVMTypeRef ret;
-                if(ClassSkeletons.TryGetValue(identifierText, out ret))
-                {
-                    return GetPtrToLLVMType(ClassSkeletons[identifierText], indirectionLevel);
-                }
+                return GetPtrToLLVMType(LLVM.Int32TypeInContext(Context), indirectionLevel);
             }
 
             return null;
         }
 
-        public static ClepsType GetClepsType(LLVMTypeRef llvmType)
+        public LLVMTypeRef? GetLLVMTypeOrNull(ClepsType clepsType)
+        {
+            LLVMTypeRef? primitiveLLVMType = GetPrimitiveLLVMTypeOrNull(clepsType);
+
+            if (primitiveLLVMType != null)
+            {
+                return primitiveLLVMType;
+            }
+
+            string identifierText = clepsType.RawTypeName;
+            int indirectionLevel = clepsType.PtrIndirectionLevel;
+
+            LLVMTypeRef ret;
+            if (ClassSkeletons.TryGetValue(identifierText, out ret))
+            {
+                return GetPtrToLLVMType(ClassSkeletons[identifierText], indirectionLevel);
+            }
+
+            return null;
+        }
+
+        public ClepsType GetClepsType(LLVMTypeRef llvmType)
         {
             if(llvmType.TypeKind == LLVMTypeKind.LLVMIntegerTypeKind)
             {
@@ -76,7 +91,7 @@ namespace ClepsCompiler.CompilerHelpers
             throw new Exception("Unknown llvm type - cannot convert to cleps type");
         }
 
-        public static ClepsType GetClepsNativeLLVMType(LLVMTypeRef llvmType)
+        public ClepsType GetClepsNativeLLVMType(LLVMTypeRef llvmType)
         {
             if (llvmType.TypeKind == LLVMTypeKind.LLVMIntegerTypeKind)
             {
@@ -98,7 +113,7 @@ namespace ClepsCompiler.CompilerHelpers
             throw new Exception("Unknown llvm type - cannot convert to cleps native type");
         }
 
-        private static LLVMTypeRef GetPtrToLLVMType(LLVMTypeRef sourceType, int indirectionLevel)
+        private LLVMTypeRef GetPtrToLLVMType(LLVMTypeRef sourceType, int indirectionLevel)
         {
             LLVMTypeRef currentType = sourceType;
             for(int i = 0; i < indirectionLevel; i++)

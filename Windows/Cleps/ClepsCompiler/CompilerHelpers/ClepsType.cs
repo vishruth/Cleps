@@ -25,6 +25,15 @@ namespace ClepsCompiler.CompilerHelpers
 
         private static bool IsEqual(ClepsType c1, ClepsType c2)
         {
+            if(Object.ReferenceEquals(c1, c2))
+            {
+                return true;
+            }
+            else if(Object.ReferenceEquals(c1, null) || Object.ReferenceEquals(c2, null))
+            {
+                return false;
+            }
+
             if (c1.IsVoidType == true && c2.IsVoidType == true)
             {
                 return true;

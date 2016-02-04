@@ -1,0 +1,14 @@
+namespace System.Types
+{
+	public class Bool
+	{
+		rawtypemap $System.LLVMTypes.I1;
+
+		public $System.LLVMTypes.I1 RawBoolean;
+	}
+
+	public class Int32
+	{
+		public $System.LLVMTypes.I32 RawInteger;
+	}
+}

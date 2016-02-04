@@ -1,0 +1,22 @@
+﻿namespace System.Tests
+{
+	public class MainProgram
+	{
+		public static fn Test = fn $System.Types.Bool ($System.LLVMTypes.I1 param1)
+		{
+			$System.Types.Int32 testVar;
+			return false;
+		};
+
+		public static fn Test2 = fn $System.LLVMTypes.I1 ($System.LLVMTypes.I1 param1)
+		{
+			return param1;
+		};
+
+		public static fn Main = fn $System.LLVMTypes.I32 ()
+		{
+			$System.Types.Int32 testVar;
+			return 0;
+		};
+	}
+}
