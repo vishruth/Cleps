@@ -281,9 +281,7 @@ namespace ClepsCompiler.Compiler
             }
 
             LLVMTypeRef llvmType = LLVM.Int32TypeInContext(Context);
-            ClepsType clepsType = ClepsLLVMTypeConvertorInst.GetClepsType(llvmType);
-            LLVMValueRef register = LLVM.ConstInt(llvmType, value, false);
-            LLVMRegister ret = new LLVMRegister(clepsType, register);
+            LLVMRegister ret = GetConstantIntRegisterOfClepsType(context, llvmType, value, "int32" /* friendly type name */);
             return ret;
         }
 
@@ -292,6 +290,21 @@ namespace ClepsCompiler.Compiler
             bool boolValue = context.TRUE() != null;
             ulong value = boolValue ? 1u : 0u;
             LLVMTypeRef llvmType = LLVM.Int1TypeInContext(Context);
+            LLVMRegister ret = GetConstantIntRegisterOfClepsType(context, llvmType, value, "bool" /* friendly type name */);
+            return ret;
+        }
+
+        /// <summary>
+        /// Return an LLVM variable defined on the stack. 
+        /// The value of the initialized to this variable needs to be a constant bool, int or long
+        /// This native llvm type is then mapped to the appropriate cleps type (which is specified in code by the rawtypemap statement) and returned
+        /// </summary>
+        /// <param name="context"></param>
+        /// <param name="llvmType"></param>
+        /// <param name="value"></param>
+        /// <returns></returns>
+        private LLVMRegister GetConstantIntRegisterOfClepsType(ParserRuleContext context, LLVMTypeRef llvmType, ulong value, string friendlyTypeName)
+        {
             ClepsType clepsType = ClepsLLVMTypeConvertorInst.GetClepsNativeLLVMType(llvmType);
 
             ClepsClass mappedClass;
@@ -305,23 +318,23 @@ namespace ClepsCompiler.Compiler
             LLVMValueRef register = LLVM.ConstInt(llvmType, value, false);
             ClepsType mappedClassType = ClepsType.GetBasicType(mappedClass.FullyQualifiedName, 0);
 
-            LLVMValueRef? constructorReturn = CallConstructorForType(context, mappedClassType, "boolInst");
+            LLVMValueRef? constructorReturn = CallConstructorForType(context, mappedClassType, friendlyTypeName + "Inst");
             if (constructorReturn == null)
             {
                 return null;
             }
 
-            LLVMValueRef boolInst = constructorReturn.Value;
-            LLVMValueRef boolInstPtr = LLVM.BuildAlloca(Builder, LLVM.TypeOf(boolInst), "boolInstPtr");
-            LLVM.BuildStore(Builder, boolInst, boolInstPtr);
+            LLVMValueRef inst = constructorReturn.Value;
+            LLVMValueRef instPtr = LLVM.BuildAlloca(Builder, LLVM.TypeOf(inst), friendlyTypeName + "InstPtr");
+            LLVM.BuildStore(Builder, inst, instPtr);
 
             //the mapped type is always the first field
-            LLVMValueRef boolInstField = LLVM.BuildStructGEP(Builder, boolInstPtr, 0, "boolInstField");
-            LLVMTypeRef boolInstFieldType = LLVM.TypeOf(boolInstField);
+            LLVMValueRef instField = LLVM.BuildStructGEP(Builder, instPtr, 0, friendlyTypeName + "InstField");
+            LLVMTypeRef instFieldType = LLVM.TypeOf(instField);
 
-            LLVM.BuildStore(Builder, register, boolInstField);
+            LLVM.BuildStore(Builder, register, instField);
 
-            LLVMRegister ret = new LLVMRegister(mappedClassType, boolInst);
+            LLVMRegister ret = new LLVMRegister(mappedClassType, inst);
             return ret;
         }
 

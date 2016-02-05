@@ -13,7 +13,7 @@
 			return param1;
 		};
 
-		public static fn Main = fn $System.LLVMTypes.I32 ()
+		public static fn Main = fn $System.Types.Int32 ()
 		{
 			$System.Types.Int32 testVar;
 			return 0;
