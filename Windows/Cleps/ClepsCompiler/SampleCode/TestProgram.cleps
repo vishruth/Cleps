@@ -13,13 +13,26 @@
 			return param1;
 		};
 
-		public static fn MainWithNativeType = fn $System.LLVMTypes.I32 ()
+		public static fn Main = fn $System.LLVMTypes.I32 ()
 		{
-			$System.Types.Int32 testVar;
-			return 0ni;
+			$System.Types.Bool testVar;
+
+			if(testVar)
+			{
+				$System.Types.Bool innerVar;
+			}
+
+			$System.LLVMTypes.I1 testNativeVar;
+
+			if(testNativeVar)
+			{
+				$System.Types.Bool innerVar;
+			}
+
+			return 2ni;
 		};
 
-		public static fn Main = fn $System.Types.Int32 ()
+		public static fn MainWithClepsType = fn $System.Types.Int32 ()
 		{
 			$System.Types.Int32 testVar;
 			return 0;

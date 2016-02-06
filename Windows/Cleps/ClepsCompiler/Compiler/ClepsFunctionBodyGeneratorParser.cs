@@ -164,6 +164,8 @@ namespace ClepsCompiler.Compiler
 
         #region Function Statement Implementations
 
+        // Note - the return of statements are not really used. It is more used in the expression returns, which is in the next section
+
         public override LLVMRegister VisitFunctionReturnStatement([NotNull] ClepsParser.FunctionReturnStatementContext context)
         {
             LLVMValueRef returnValueRegister;
@@ -254,6 +256,59 @@ namespace ClepsCompiler.Compiler
             LLVMValueRef variablePtr = LLVM.BuildCall(Builder, llvmConstructor, new LLVMValueRef[0], variableName + "Ptr");
             LLVMValueRef variable = LLVM.BuildLoad(Builder, variablePtr, variableName);
             return variable;
+        }
+
+        public override LLVMRegister VisitIfStatement([NotNull] ClepsParser.IfStatementContext context)
+        {
+            ClepsParser.RightHandExpressionContext condition = context.rightHandExpression();
+            LLVMRegister expressionValue = Visit(condition);
+
+            ClepsType nativeBooleanType = ClepsType.GetBasicType("System.LLVMTypes.I1", 0 /* ptr indirection level */);
+            LLVMValueRef? conditionRegister = null;
+
+            //handle native llvm boolean type
+            if (expressionValue.VariableType == nativeBooleanType)
+            {
+                conditionRegister = expressionValue.LLVMValueRef;
+            }
+            //handle cleps llvm boolean type
+            else if (ClassManager.RawLLVMTypeMappingClasses.ContainsKey(nativeBooleanType))
+            {
+                ClepsClass mappedBooleanClass = ClassManager.RawLLVMTypeMappingClasses[nativeBooleanType];
+                ClepsType mappedBooleanType = ClepsType.GetBasicType(mappedBooleanClass.FullyQualifiedName, 0 /* ptr indirection level */);
+
+                if (expressionValue.VariableType == mappedBooleanType)
+                {
+                    //if the mapped type exists, then below can never be null, so call value automatically
+                    LLVMTypeRef mappedBooleanTypeInLLVM = ClepsLLVMTypeConvertorInst.GetLLVMTypeOrNull(mappedBooleanType).Value;
+
+                    LLVMValueRef ifCondMappedBooleanPtr = LLVM.BuildAlloca(Builder, mappedBooleanTypeInLLVM, "ifCondMappedBoolean");
+                    LLVM.BuildStore(Builder, expressionValue.LLVMValueRef, ifCondMappedBooleanPtr);
+                    //get the first field in the mapped type - see rawtypemap for more details
+                    LLVMValueRef conditionRegisterPtr = LLVM.BuildStructGEP(Builder, ifCondMappedBooleanPtr, 0, "ifCondBooleanFieldPtr");
+                    conditionRegister = LLVM.BuildLoad(Builder, conditionRegisterPtr, "ifCondBooleanField");
+                }
+            }
+
+            if(conditionRegister == null)
+            {
+                string errorMessage = String.Format("The condition expression in the if condition returns type {0} instead of a boolean expression. ", expressionValue.VariableType.GetTypeName());
+                Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
+                //just assume this is condition is true to avoid stalling the compilation
+                conditionRegister = LLVM.ConstInt(LLVM.Int1TypeInContext(Context), (ulong)1, false);
+            }
+
+            LLVMValueRef currentFunction = LLVM.GetInsertBlock(Builder).GetBasicBlockParent();
+            LLVMBasicBlockRef ifThenBlock = LLVM.AppendBasicBlockInContext(Context, currentFunction, "ifthen");
+            LLVMBasicBlockRef ifEndBlock = LLVM.AppendBasicBlockInContext(Context, currentFunction, "ifend");
+
+            LLVM.BuildCondBr(Builder, conditionRegister.Value, ifThenBlock, ifEndBlock);
+            LLVM.PositionBuilderAtEnd(Builder, ifThenBlock);
+            Visit(context.statementBlock());
+            LLVM.BuildBr(Builder, ifEndBlock);
+            LLVM.PositionBuilderAtEnd(Builder, ifEndBlock);
+
+            return expressionValue;
         }
 
         #endregion Function Statement Implementations
