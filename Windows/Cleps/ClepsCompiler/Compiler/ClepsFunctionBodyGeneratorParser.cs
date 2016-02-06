@@ -274,13 +274,33 @@ namespace ClepsCompiler.Compiler
         public override LLVMRegister VisitNumericAssignments([NotNull] ClepsParser.NumericAssignmentsContext context)
         {
             string valueString = context.NUMERIC().GetText();
+            string numericType = context.NumericType != null ? context.NumericType.Text : "";
+
             ulong value;
             if(!ulong.TryParse(valueString, out value))
             {
                 throw new Exception(String.Format("Numeric value {0} not a valid int", valueString));
             }
 
+
             LLVMTypeRef llvmType = LLVM.Int32TypeInContext(Context);
+
+            //hardcoded identifiers for llvm i.e. native types
+            if (numericType == "ni")
+            {
+                LLVMValueRef valueToRet = LLVM.ConstInt(llvmType, value, false);
+                LLVMRegister nativeRet = new LLVMRegister(ClepsLLVMTypeConvertorInst.GetClepsNativeLLVMType(llvmType), valueToRet);
+                return nativeRet;
+            }
+
+            if (!String.IsNullOrEmpty(numericType))
+            {
+                //for now other numeric types are not supported
+                string errorMessage = String.Format("Numerics of type {0} was not found. Make sure the class that defined {0} was imported.", numericType);
+                Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
+                //just assume this is numericType is "" to avoid stalling the compilation
+            }
+
             LLVMRegister ret = GetConstantIntRegisterOfClepsType(context, llvmType, value, "int32" /* friendly type name */);
             return ret;
         }

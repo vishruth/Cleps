@@ -118,13 +118,22 @@ namespace ClepsCompiler.Compiler
             else
             {
                 LLVMValueRef functionToCall = LLVM.GetNamedFunction(module, classManager.MainFunctionFullNames.First());
-                LLVMValueRef intMappedTypeRet = LLVM.BuildCall(builder, functionToCall, new LLVMValueRef[0], "entryPointCall");
-                LLVMValueRef intMappedTypeRetPtr = LLVM.BuildAlloca(builder, LLVM.TypeOf(intMappedTypeRet), "intMappedType");
-                LLVM.BuildStore(builder, intMappedTypeRet, intMappedTypeRetPtr);
-                //Extract the first field to get the int value from the mapped type
-                //See rawtypemap for more details
-                LLVMValueRef fieldPtr = LLVM.BuildStructGEP(builder, intMappedTypeRetPtr, 0, "returnIntFieldPtr");                
-                intRet = LLVM.BuildLoad(builder, fieldPtr, "returnValue");
+                LLVMValueRef intOrIntMappedTypeRet = LLVM.BuildCall(builder, functionToCall, new LLVMValueRef[0], "entryPointCall");
+                LLVMTypeRef returnType = LLVM.TypeOf(intOrIntMappedTypeRet);
+
+                if (returnType.TypeKind == LLVMTypeKind.LLVMIntegerTypeKind && returnType.GetIntTypeWidth() == 32)
+                {
+                    intRet = intOrIntMappedTypeRet;
+                }
+                else
+                {
+                    LLVMValueRef intMappedTypeRetPtr = LLVM.BuildAlloca(builder, LLVM.TypeOf(intOrIntMappedTypeRet), "intMappedType");
+                    LLVM.BuildStore(builder, intOrIntMappedTypeRet, intMappedTypeRetPtr);
+                    //Extract the first field to get the int value from the mapped type
+                    //See rawtypemap for more details
+                    LLVMValueRef fieldPtr = LLVM.BuildStructGEP(builder, intMappedTypeRetPtr, 0, "returnIntFieldPtr");
+                    intRet = LLVM.BuildLoad(builder, fieldPtr, "returnValue");
+                }
             }
 
             LLVM.BuildRet(builder, intRet);

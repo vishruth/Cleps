@@ -13,6 +13,12 @@
 			return param1;
 		};
 
+		public static fn MainWithNativeType = fn $System.LLVMTypes.I32 ()
+		{
+			$System.Types.Int32 testVar;
+			return 0ni;
+		};
+
 		public static fn Main = fn $System.Types.Int32 ()
 		{
 			$System.Types.Int32 testVar;

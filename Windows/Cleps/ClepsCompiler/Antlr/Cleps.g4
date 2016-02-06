@@ -25,7 +25,7 @@ RAWTYPEMAP : 'rawtypemap';
 ASSIGNMENT : 'assignment';
 ASSIGNMENT_OPERATOR : '=';
 ID : [a-zA-Z] [a-zA-Z0-9_]*;
-NUMERIC : [0-9]+ ('.' [0-9]+)? ID?;
+NUMERIC : [0-9]+ ('.' [0-9]+)?;
 STRING : ID? '"' ('\\"'|.)*? '"'
 	 |	ID? '\'\'' ('\\\''|.)*? '\'\''
 	;
@@ -80,7 +80,7 @@ rightHandExpression :
 	| '(' rightHandExpression ')' # BracketedExpression;
 
 rightHandExpressionSimple : stringAssignments | numericAssignments | nullAssignment | booleanAssignments | functionCallAssignment | variableAssignment | typenameAssignment | classInstanceAssignment;
-numericAssignments : NUMERIC;
+numericAssignments : NUMERIC NumericType=ID?;
 nullAssignment : NULL;
 booleanAssignments : TRUE|FALSE;
 stringAssignments : STRING;
