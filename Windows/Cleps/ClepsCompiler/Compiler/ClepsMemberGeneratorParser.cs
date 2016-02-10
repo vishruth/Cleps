@@ -111,14 +111,14 @@ namespace ClepsCompiler.Compiler
 
         private void AddConstructor(LLVMTypeRef structType, string className)
         {
-            LLVMTypeRef structTypePtr = LLVM.PointerType(structType, 0 /* Global address space*/);
-            LLVMTypeRef constructorType = LLVM.FunctionType(structTypePtr, new LLVMTypeRef[] { }, false);
+            LLVMTypeRef constructorType = LLVM.FunctionType(structType, new LLVMTypeRef[] { }, false);
             string constructorName = String.Format("{0}.new", className);
             LLVMValueRef constructor = LLVM.AddFunction(Module, constructorName, constructorType);
             LLVMBasicBlockRef block = LLVM.AppendBasicBlockInContext(Context, constructor, "entry");
             LLVM.PositionBuilderAtEnd(Builder, block);
 
-            LLVMValueRef instance = LLVM.BuildAlloca(Builder, structType, "Inst");
+            LLVMValueRef instancePtr = LLVM.BuildAlloca(Builder, structType, "InstPtr");
+            LLVMValueRef instance = LLVM.BuildLoad(Builder, instancePtr, "Inst");
             LLVM.BuildRet(Builder, instance);
         }
 

@@ -18,14 +18,14 @@ namespace ClepsCompiler.CompilerHelpers
         public ClepsType VariableType { get; private set; }
 
         /// <summary>
-        /// The llvm register where this value is stored
+        /// The llvm register where the ptr to the memory containing this value is stored
         /// </summary>
-        public LLVMValueRef LLVMValueRef { get; private set; }
+        public LLVMValueRef LLVMPtrValueRef { get; private set; }
 
-        public LLVMRegister(ClepsType variableType, LLVMValueRef llvmValueRef)
+        public LLVMRegister(ClepsType variableType, LLVMValueRef llvmPtrValueRef)
         {
             VariableType = variableType;
-            LLVMValueRef = llvmValueRef;
+            LLVMPtrValueRef = llvmPtrValueRef;
         }
     }
 }
