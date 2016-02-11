@@ -24,8 +24,9 @@ RETURN : 'return';
 RAWTYPEMAP : 'rawtypemap';
 ASSIGNMENT : 'assignment';
 ASSIGNMENT_OPERATOR : '=';
+PASCALCASE_ID : [A-Z] [a-zA-Z0-9_]*;
 ID : [a-zA-Z] [a-zA-Z0-9_]*;
-NUMERIC : [0-9]+ ('.' [0-9]+)?;
+NUMERIC_TOKEN : [0-9]+ ('.' [0-9]+)?;
 STRING : ID? '"' ('\\"'|.)*? '"'
 	 |	ID? '\'\'' ('\\\''|.)*? '\'\''
 	;
@@ -35,7 +36,16 @@ OPERATOR : ('+'|'-'|'*'|'/')+
 
 ///////////////////////////////////////////////////////
 
-nestedIdentifier : ID ('.' ID)*;
+variable : '@' VariableName=(ID|PASCALCASE_ID);
+nestedIdentifier : PASCALCASE_ID ('.' PASCALCASE_ID)*;
+numeric : NumericValue=NUMERIC_TOKEN NumericType=ID?;
+classOrMemberName : PASCALCASE_ID;
+
+visibilityModifier : PUBLIC | INTERNAL;
+typename : RawTypeName=nestedIdentifier (PtrIndirectionLevel+='*')* '!'?;
+typenameAndVoid : typename | VOID;
+
+///////////////////////////////////////////////////////
 
 compilationUnit : namespaceBlockStatement;
 
@@ -44,29 +54,21 @@ namespaceBlockStatement : (NAMESPACE NamespaceName=nestedIdentifier '{' usingNam
 usingNamespaceStatement : USING STATIC? nestedIdentifier END;
 usingNamespaceStatements : usingNamespaceStatement+;
 
-visibilityModifier : PUBLIC | INTERNAL;
-
-classDeclarationStatements : (visibilityModifier CLASS ClassName=ID '{') classBodyStatements ('}');
+classDeclarationStatements : (visibilityModifier CLASS ClassName=classOrMemberName '{') classBodyStatements ('}');
 classBodyStatements : 
 (
 		classDeclarationStatements
-	|	memberDeclarationStatement
+	|	memberVariableDeclarationStatement
+	|	memberFunctionDeclarationStatement
+	|	memberAssignmentFunctionDeclarationStatement
 	|	rawTypeMapStatment
 )*;
 
-typename : '$' RawTypeName=nestedIdentifier (PtrIndirectionLevel+='*')* '!'?;
-typenameAndVoid : typename | VOID;
-
 rawTypeMapStatment : RAWTYPEMAP typename END;
 
-///////////////////////////////////////////////////////
-
-memberDeclarationStatement : visibilityModifier STATIC? declarationStatement;
-
-declarationStatement : memberVariableDeclarationStatement | memberFunctionDeclarationStatement;
-
-memberVariableDeclarationStatement : variableDeclarationStatement;
-memberFunctionDeclarationStatement : functionDeclarationStatement | assignmentFunctionDeclarationStatement;
+memberVariableDeclarationStatement : visibilityModifier STATIC? typename FieldName=classOrMemberName (ASSIGNMENT_OPERATOR rightHandExpression)? END;
+memberFunctionDeclarationStatement : visibilityModifier STATIC? functionDeclarationStatement;
+memberAssignmentFunctionDeclarationStatement : visibilityModifier STATIC? assignmentFunctionDeclarationStatement;
 
 ///////////////////////////////////////////////////////
 
@@ -76,20 +78,21 @@ rightHandExpression :
 	| rightHandExpression OPERATOR rightHandExpression # BinaryOperatorOnExpression
 	| rightHandExpression OPERATOR # PostOperatorOnExpression
 	| rightHandExpression '.' functionCall # FunctionCallOnExpression
-	| rightHandExpression '.' FieldName=ID # FieldAccessOnExpression
+	| rightHandExpression '.' FieldName=classOrMemberName # FieldAccessOnExpression
 	| '(' rightHandExpression ')' # BracketedExpression;
 
 rightHandExpressionSimple : stringAssignments | numericAssignments | nullAssignment | booleanAssignments | functionCallAssignment | variableAssignment | typenameAssignment | classInstanceAssignment;
-numericAssignments : NUMERIC NumericType=ID?;
+numericAssignments : numeric;
 nullAssignment : NULL;
 booleanAssignments : TRUE|FALSE;
 stringAssignments : STRING;
 functionCallAssignment : functionCall;
-variableAssignment : VariableName=ID;
+variableAssignment : variable;
+fieldAssignment : classOrMemberName;
 typenameAssignment : typename;
 classInstanceAssignment : NEW typename '(' (FunctionParameters+=rightHandExpression (',' FunctionParameters+=rightHandExpression)*)? ')';
 
-functionCall : FunctionName=ID '(' (FunctionParameters+=rightHandExpression (',' FunctionParameters+=rightHandExpression)*)? ')';
+functionCall : FunctionName=classOrMemberName '(' (FunctionParameters+=rightHandExpression (',' FunctionParameters+=rightHandExpression)*)? ')';
 
 /////////////////////////////////////////////////////////////
 
@@ -98,14 +101,14 @@ functionStatement : functionReturnStatement | functionVariableDeclarationStateme
 functionReturnStatement : RETURN rightHandExpression? END;
 
 functionVariableDeclarationStatement : variableDeclarationStatement;
-variableDeclarationStatement : typename VariableName=ID (ASSIGNMENT_OPERATOR rightHandExpression)? END;
-functionVariableAssigmentStatement : VariableName=ID ASSIGNMENT_OPERATOR rightHandExpression END;
-functionFieldAssignmentStatement : LeftExpression=rightHandExpression '.' FieldName=ID ASSIGNMENT_OPERATOR RightExpression=rightHandExpression END;
+variableDeclarationStatement : typename variable (ASSIGNMENT_OPERATOR rightHandExpression)? END;
+functionVariableAssigmentStatement : variable ASSIGNMENT_OPERATOR rightHandExpression END;
+functionFieldAssignmentStatement : LeftExpression=rightHandExpression '.' FieldName=classOrMemberName ASSIGNMENT_OPERATOR RightExpression=rightHandExpression END;
 
-functionDeclarationStatement : FUNC FunctionName=ID (ASSIGNMENT_OPERATOR FUNC FunctionReturnType=typenameAndVoid '(' functionParametersList ')' statementBlock)? END;
+functionDeclarationStatement : FUNC FunctionName=classOrMemberName (ASSIGNMENT_OPERATOR FUNC FunctionReturnType=typenameAndVoid '(' functionParametersList ')' statementBlock)? END;
 assignmentFunctionDeclarationStatement : ASSIGNMENT FunctionName=ASSIGNMENT_OPERATOR FUNC FunctionReturnType=typenameAndVoid '(' functionParametersList ')' statementBlock END;
 
-functionParametersList : (FunctionParameterTypes+=typename FunctionParameterNames+=nestedIdentifier (',' FunctionParameterTypes+=typename FunctionParameterNames+=nestedIdentifier)*)?;
+functionParametersList : (FunctionParameterTypes+=typename FunctionParameterNames+=variable (',' FunctionParameterTypes+=typename FunctionParameterNames+=variable)*)?;
 statementBlock : '{' functionStatement* '}';
 
 functionCallStatement : (rightHandExpression '.')? functionCall END;

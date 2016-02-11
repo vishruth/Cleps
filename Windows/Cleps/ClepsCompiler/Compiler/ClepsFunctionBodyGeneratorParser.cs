@@ -54,48 +54,27 @@ namespace ClepsCompiler.Compiler
 
         public override LLVMRegister VisitClassDeclarationStatements([NotNull] ClepsParser.ClassDeclarationStatementsContext context)
         {
-            CurrentNamespaceAndClass.Add(context.ClassName.Text);
+            CurrentNamespaceAndClass.Add(context.ClassName.GetText());
             var ret = VisitChildren(context);
             CurrentNamespaceAndClass.RemoveAt(CurrentNamespaceAndClass.Count - 1);
             return ret;
         }
 
-        public override LLVMRegister VisitMemberDeclarationStatement([NotNull] ClepsParser.MemberDeclarationStatementContext context)
+        public override LLVMRegister VisitMemberAssignmentFunctionDeclarationStatement([NotNull] ClepsParser.MemberAssignmentFunctionDeclarationStatementContext context)
         {
             bool isStatic = context.STATIC() != null;
-            ClepsParser.MemberFunctionDeclarationStatementContext memberDecarationContext = context.declarationStatement().memberFunctionDeclarationStatement();
-
-            if (memberDecarationContext == null)
-            {
-                return null;
-            }
-
-            var assignmentFunctionDeclarationStatement = memberDecarationContext.assignmentFunctionDeclarationStatement();
-            var functionDeclarationContext = memberDecarationContext.functionDeclarationStatement();
-
-            if (assignmentFunctionDeclarationStatement != null)
-            {
-                return VisitAssignmentFunctionDeclarationStatement(assignmentFunctionDeclarationStatement, isStatic);
-            }
-            else
-            {
-                return VisitFunctionDeclarationStatement(functionDeclarationContext, isStatic);
-            }
-        }
-
-        private LLVMRegister VisitAssignmentFunctionDeclarationStatement([NotNull] ClepsParser.AssignmentFunctionDeclarationStatementContext context, bool isStatic)
-        {
-            ClepsParser.TypenameAndVoidContext returnTypeContext = context.FunctionReturnType;
-            ClepsParser.FunctionParametersListContext parametersContext = context.functionParametersList();
-            string functionName = context.FunctionName.Text;
+            ClepsParser.TypenameAndVoidContext returnTypeContext = context.assignmentFunctionDeclarationStatement().FunctionReturnType;
+            ClepsParser.FunctionParametersListContext parametersContext = context.assignmentFunctionDeclarationStatement().functionParametersList();
+            string functionName = context.assignmentFunctionDeclarationStatement().FunctionName.Text;
             return VisitFunctionDeclarationBody(context, returnTypeContext, parametersContext, functionName, isStatic);
         }
 
-        private LLVMRegister VisitFunctionDeclarationStatement([NotNull] ClepsParser.FunctionDeclarationStatementContext context, bool isStatic)
+        public override LLVMRegister VisitMemberFunctionDeclarationStatement([NotNull] ClepsParser.MemberFunctionDeclarationStatementContext context)
         {
-            ClepsParser.TypenameAndVoidContext returnTypeContext = context.FunctionReturnType;
-            ClepsParser.FunctionParametersListContext parametersContext = context.functionParametersList();
-            string functionName = context.FunctionName.Text;
+            bool isStatic = context.STATIC() != null;
+            ClepsParser.TypenameAndVoidContext returnTypeContext = context.functionDeclarationStatement().FunctionReturnType;
+            ClepsParser.FunctionParametersListContext parametersContext = context.functionDeclarationStatement().functionParametersList();
+            string functionName = context.functionDeclarationStatement().FunctionName.GetText();
             return VisitFunctionDeclarationBody(context, returnTypeContext, parametersContext, functionName, isStatic);
         }
 
@@ -126,7 +105,7 @@ namespace ClepsCompiler.Compiler
             VariableManager.AddBlock();
 
             ClepsType clepsReturnType = ClepsType.GetBasicOrVoidType(returnTypeContext);
-            List<string> paramNames = parametersContext._FunctionParameterNames.Select(p => p.GetText()).ToList();
+            List<string> paramNames = parametersContext._FunctionParameterNames.Select(p => p.VariableName.Text).ToList();
             List<ClepsType> clepsParameterTypes = parametersContext._FunctionParameterTypes.Select(t => ClepsType.GetBasicType(t)).ToList();
 
             if (!isStatic)
@@ -195,7 +174,7 @@ namespace ClepsCompiler.Compiler
         public override LLVMRegister VisitFunctionVariableDeclarationStatement([NotNull] ClepsParser.FunctionVariableDeclarationStatementContext context)
         {
             ClepsParser.VariableDeclarationStatementContext variableDeclarationStatement = context.variableDeclarationStatement();
-            string variableName = variableDeclarationStatement.VariableName.Text;
+            string variableName = variableDeclarationStatement.variable().VariableName.Text;
             
             if(VariableManager.IsVariableDefined(variableName))
             {
@@ -317,15 +296,15 @@ namespace ClepsCompiler.Compiler
 
         public override LLVMRegister VisitVariableAssignment([NotNull] ClepsParser.VariableAssignmentContext context)
         {
-            string variableName = context.VariableName.Text;
+            string variableName = context.variable().VariableName.Text;
             LLVMRegister ret = VariableManager.GetVariable(variableName);
             return ret;
         }
 
         public override LLVMRegister VisitNumericAssignments([NotNull] ClepsParser.NumericAssignmentsContext context)
         {
-            string valueString = context.NUMERIC().GetText();
-            string numericType = context.NumericType != null ? context.NumericType.Text : "";
+            string valueString = context.numeric().NumericValue.Text;
+            string numericType = context.numeric().NumericType != null ? context.numeric().NumericType.Text : "";
 
             ulong value;
             if(!ulong.TryParse(valueString, out value))

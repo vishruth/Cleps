@@ -2,39 +2,39 @@
 {
 	public class MainProgram
 	{
-		public static fn Test = fn $System.Types.Bool ($System.LLVMTypes.I1 param1)
+		public static fn Test = fn System.Types.Bool (System.LLVMTypes.I1 @param1)
 		{
-			$System.Types.Int32 testVar;
+			System.Types.Int32 @testVar;
 			return false;
 		};
 
-		public static fn Test2 = fn $System.LLVMTypes.I1 ($System.LLVMTypes.I1 param1)
+		public static fn Test2 = fn System.LLVMTypes.I1 (System.LLVMTypes.I1 @param1)
 		{
-			return param1;
+			return @param1;
 		};
 
-		public static fn Main = fn $System.LLVMTypes.I32 ()
+		public static fn Main = fn System.LLVMTypes.I32 ()
 		{
-			$System.Types.Bool testVar;
+			System.Types.Bool @testVar;
 
-			if(testVar)
+			if(@testVar)
 			{
-				$System.Types.Bool innerVar;
+				System.Types.Bool @innerVar;
 			}
 
-			$System.LLVMTypes.I1 testNativeVar;
+			System.LLVMTypes.I1 @testNativeVar;
 
-			if(testNativeVar)
+			if(@testNativeVar)
 			{
-				$System.Types.Bool innerVar;
+				System.Types.Bool @innerVar;
 			}
 
 			return 2ni;
 		};
 
-		public static fn MainWithClepsType = fn $System.Types.Int32 ()
+		public static fn MainWithClepsType = fn System.Types.Int32 ()
 		{
-			$System.Types.Int32 testVar;
+			System.Types.Int32 @testVar;
 			return 0;
 		};
 	}

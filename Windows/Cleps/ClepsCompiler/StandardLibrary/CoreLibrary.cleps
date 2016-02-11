@@ -2,15 +2,20 @@ namespace System.Types
 {
 	public class Bool
 	{
-		rawtypemap $System.LLVMTypes.I1;
+		rawtypemap System.LLVMTypes.I1;
 
-		public $System.LLVMTypes.I1 RawBoolean;
+		public System.LLVMTypes.I1 RawBoolean;
 	}
 
 	public class Int32
 	{
-		rawtypemap $System.LLVMTypes.I32;
+		rawtypemap System.LLVMTypes.I32;
 
-		public $System.LLVMTypes.I32 RawInteger;
+		public System.LLVMTypes.I32 RawInteger;
+
+		public assignment = fn void (System.Types.Int32 @valueToCopy)
+		{	
+			return;
+		};
 	}
 }

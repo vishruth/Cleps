@@ -52,7 +52,7 @@ namespace ClepsCompiler.Compiler
 
         public override int VisitClassDeclarationStatements([NotNull] ClepsParser.ClassDeclarationStatementsContext context)
         {
-            CurrentNamespaceAndClass.Add(context.ClassName.Text);
+            CurrentNamespaceAndClass.Add(context.ClassName.GetText());
 
             string className = String.Join(".", CurrentNamespaceAndClass);
             
