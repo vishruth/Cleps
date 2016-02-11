@@ -143,6 +143,7 @@ namespace ClepsCompiler.Compiler
                 .ToList()
                 .ForEach(p => {
                     LLVMValueRef functionParamPtr = LLVM.BuildAlloca(Builder, LLVM.TypeOf(p.ParamRegister), p.ParamName);
+                    LLVM.BuildStore(Builder, p.ParamRegister, functionParamPtr);
                     VariableManager.AddLocalVariable(p.ParamName, p.ParamType, functionParamPtr);
                 });
 
