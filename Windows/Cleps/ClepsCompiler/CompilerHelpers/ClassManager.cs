@@ -41,6 +41,12 @@ namespace ClepsCompiler.CompilerHelpers
             return LoadedClassesAndMembers[className].DoesClassContainMember(memberName);
         }
 
+        public bool DoesClassContainMember(string className, string memberName, bool isStatic)
+        {
+            Debug.Assert(LoadedClassesAndMembers.ContainsKey(className));
+            return LoadedClassesAndMembers[className].DoesClassContainMember(memberName, isStatic);
+        }
+
         public void AddNewMember(string className, string memberName, bool isStatic, ClepsType memberType)
         {
             Debug.Assert(LoadedClassesAndMembers.ContainsKey(className));

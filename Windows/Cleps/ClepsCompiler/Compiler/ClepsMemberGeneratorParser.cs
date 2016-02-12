@@ -24,6 +24,7 @@ namespace ClepsCompiler.Compiler
         private ClepsLLVMTypeConvertor ClepsLLVMTypeConvertorInst;
 
         private List<string> CurrentNamespaceAndClass;
+        private List<string> FunctionHierarchy;
 
         public ClepsMemberGeneratorParser(ClassManager classManager, CompileStatus status, LLVMContextRef context, LLVMModuleRef module, LLVMBuilderRef builder, ClepsLLVMTypeConvertor clepsLLVMTypeConvertor)
         {
@@ -37,7 +38,8 @@ namespace ClepsCompiler.Compiler
 
         public override int VisitCompilationUnit([NotNull] ClepsParser.CompilationUnitContext context)
         {
-            CurrentNamespaceAndClass = new List<String>();
+            CurrentNamespaceAndClass = new List<string>();
+            FunctionHierarchy = new List<string>();
             var ret = VisitChildren(context);
             return ret;
         }
@@ -53,10 +55,16 @@ namespace ClepsCompiler.Compiler
         public override int VisitClassDeclarationStatements([NotNull] ClepsParser.ClassDeclarationStatementsContext context)
         {
             CurrentNamespaceAndClass.Add(context.ClassName.GetText());
-            var ret = VisitChildren(context);
 
             string className = String.Join(".", CurrentNamespaceAndClass);
-            ClepsClass classDetails = ClassManager.LoadedClassesAndMembers[className];
+            ClepsClass classDetails;
+            if(!ClassManager.LoadedClassesAndMembers.TryGetValue(className, out classDetails))
+            {
+                //if the class was not found in the loaded class stage, then this is probably due to an earlier parsing error, just stop processing this class
+                return -1;
+            }
+
+            var ret = VisitChildren(context);
 
             ClepsType classType = ClepsType.GetBasicType(className, 0 /* ptrIndirectionLevel */);
             LLVMTypeRef? structType = ClepsLLVMTypeConvertorInst.GetLLVMTypeOrNull(classType);
@@ -156,11 +164,13 @@ namespace ClepsCompiler.Compiler
         private int GenerateMemberFunction(ParserRuleContext context, bool isStatic, string functionName, ClepsParser.TypenameAndVoidContext functionReturnContext, ClepsParser.FunctionParametersListContext parameterContext)
         {
             string className = String.Join(".", CurrentNamespaceAndClass);
-            string fullyQualifiedName = String.Format("{0}.{1}", String.Join(".", CurrentNamespaceAndClass), functionName);
+            FunctionHierarchy.Add(functionName);
+            string fullFunctionName = String.Join(".", FunctionHierarchy);
+            string fullyQualifiedName = String.Format("{0}.{1}", className, fullFunctionName);
 
-            if (ClassManager.DoesClassContainMember(className, functionName))
+            if (ClassManager.DoesClassContainMember(className, fullFunctionName))
             {
-                string errorMessage = String.Format("Class {0} has multiple definitions of member {1}", className, functionName);
+                string errorMessage = String.Format("Class {0} has multiple definitions of member {1}", className, fullFunctionName);
                 Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
                 //Don't process this member
                 return -1;
@@ -194,7 +204,8 @@ namespace ClepsCompiler.Compiler
             LLVM.PositionBuilderAtEnd(Builder, blockRef);
 
             ClepsType clepsFunctionType = ClepsType.GetFunctionType(clepsReturnType, clepsParameterTypes);
-            ClassManager.AddNewMember(className, functionName, isStatic, clepsFunctionType);
+            ClassManager.AddNewMember(className, fullFunctionName, isStatic, clepsFunctionType);
+            FunctionHierarchy.RemoveAt(FunctionHierarchy.Count - 1);
             return 0;
         }
 

@@ -23,6 +23,7 @@ namespace ClepsCompiler.Compiler
         private ClepsLLVMTypeConvertor ClepsLLVMTypeConvertorInst;
 
         private List<string> CurrentNamespaceAndClass;
+        private List<string> FunctionHierarchy;
         private VariableManager VariableManager;
 
         public ClepsFunctionBodyGeneratorParser(ClassManager classManager, CompileStatus status, LLVMContextRef context, LLVMModuleRef module, LLVMBuilderRef builder, ClepsLLVMTypeConvertor clepsLLVMTypeConvertor)
@@ -37,7 +38,8 @@ namespace ClepsCompiler.Compiler
 
         public override LLVMRegister VisitCompilationUnit([NotNull] ClepsParser.CompilationUnitContext context)
         {
-            CurrentNamespaceAndClass = new List<String>();
+            CurrentNamespaceAndClass = new List<string>();
+            FunctionHierarchy = new List<string>();
             VariableManager = new VariableManager();
 
             var ret = VisitChildren(context);
@@ -55,6 +57,15 @@ namespace ClepsCompiler.Compiler
         public override LLVMRegister VisitClassDeclarationStatements([NotNull] ClepsParser.ClassDeclarationStatementsContext context)
         {
             CurrentNamespaceAndClass.Add(context.ClassName.GetText());
+
+            string className = String.Join(".", CurrentNamespaceAndClass);
+            ClepsClass classDetails;
+            if (!ClassManager.LoadedClassesAndMembers.TryGetValue(className, out classDetails))
+            {
+                //if the class was not found in the loaded class stage, then this is probably due to an earlier parsing error, just stop processing this class
+                return null;
+            }
+
             var ret = VisitChildren(context);
             CurrentNamespaceAndClass.RemoveAt(CurrentNamespaceAndClass.Count - 1);
             return ret;
@@ -88,15 +99,15 @@ namespace ClepsCompiler.Compiler
         )
         {
             string className = String.Join(".", CurrentNamespaceAndClass);
-            string fullyQualifiedName = String.Format("{0}.{1}", className, functionName);
 
-            if (!ClassManager.DoesClassContainMember(className, functionName))
+            if (!ClassManager.DoesClassContainMember(className, functionName, isStatic))
             {
-                string errorMessage = String.Format("Class {0} does not have a definition for {1}", className, functionName);
-                Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
-                //Don't process this member
+                //if the member was not found in the loaded member stage, then this is probably due to an earlier parsing error, just stop processing this member
                 return null;
             }
+
+            FunctionHierarchy.Add(functionName);
+            string fullyQualifiedName = String.Join(".", CurrentNamespaceAndClass.Union(FunctionHierarchy).ToList());
 
             LLVMValueRef currFunc = LLVM.GetNamedFunction(Module, fullyQualifiedName);
             LLVMBasicBlockRef basicBlock = LLVM.GetFirstBasicBlock(currFunc);
@@ -129,6 +140,7 @@ namespace ClepsCompiler.Compiler
             var ret = VisitChildren(context);
 
             VariableManager.RemoveBlock();
+            FunctionHierarchy.RemoveAt(FunctionHierarchy.Count - 1);
             return ret;
         }
 
@@ -154,7 +166,7 @@ namespace ClepsCompiler.Compiler
             LLVMValueRef returnValueRegister;
             ClepsType returnType;
 
-            if(context.rightHandExpression() == null)
+            if (context.rightHandExpression() == null)
             {
                 returnValueRegister = LLVM.BuildRetVoid(Builder);
                 returnType = ClepsType.GetVoidType();
@@ -175,8 +187,8 @@ namespace ClepsCompiler.Compiler
         {
             ClepsParser.VariableDeclarationStatementContext variableDeclarationStatement = context.variableDeclarationStatement();
             string variableName = variableDeclarationStatement.variable().VariableName.Text;
-            
-            if(VariableManager.IsVariableDefined(variableName))
+
+            if (VariableManager.IsVariableDefined(variableName))
             {
                 string errorMessage = String.Format("Variable {0} is already defined", variableName);
                 Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
@@ -194,7 +206,7 @@ namespace ClepsCompiler.Compiler
             else if (clepsVariableType.IsPointerType)
             {
                 LLVMTypeRef? pointerType = ClepsLLVMTypeConvertorInst.GetLLVMTypeOrNull(clepsVariableType);
-                if(pointerType == null)
+                if (pointerType == null)
                 {
                     string errorMessage = String.Format("Could not find type {0}", clepsVariableType.GetTypeName());
                     Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
@@ -206,7 +218,7 @@ namespace ClepsCompiler.Compiler
             else
             {
                 LLVMValueRef? constructorReturn = CallConstructorAllocaForType(context, clepsVariableType, variableName);
-                if(constructorReturn == null)
+                if (constructorReturn == null)
                 {
                     return null;
                 }
@@ -264,7 +276,7 @@ namespace ClepsCompiler.Compiler
                 }
             }
 
-            if(conditionRegisterPtr == null)
+            if (conditionRegisterPtr == null)
             {
                 string errorMessage = String.Format("The condition expression in the if condition returns type {0} instead of a boolean expression. ", expressionValue.VariableType.GetTypeName());
                 Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
@@ -285,6 +297,81 @@ namespace ClepsCompiler.Compiler
 
             return expressionValue;
         }
+
+        public override LLVMRegister VisitFunctionCallStatement([NotNull] ClepsParser.FunctionCallStatementContext context)
+        {
+            string className = String.Join(".", CurrentNamespaceAndClass);
+            string fullFunctionName = String.Join(".", FunctionHierarchy);
+            bool isStatic = ClassManager.DoesClassContainMember(className, fullFunctionName, true /* search for static members */);
+
+            string functionBeingCalled = context.functionCall().FunctionName.GetText();
+            string fullyQualifiedNameOfFunctionBeingCalled;
+            ClepsType functionType;
+            List<LLVMValueRef> parameterPtrs;
+
+            if (ClassManager.DoesClassContainMember(className, functionBeingCalled, true /* check static members */))
+            {
+                fullyQualifiedNameOfFunctionBeingCalled = String.Format("{0}.{1}", className, functionBeingCalled);
+                functionType = ClassManager.LoadedClassesAndMembers[className].StaticMemberMethods[functionBeingCalled];
+                parameterPtrs = new List<LLVMValueRef>();
+            }
+            else if(!isStatic && ClassManager.DoesClassContainMember(className, functionBeingCalled, false /* check non static members */))
+            {
+                fullyQualifiedNameOfFunctionBeingCalled = String.Format("{0}.{1}", className, functionBeingCalled);
+                functionType = ClassManager.LoadedClassesAndMembers[className].MemberMethods[functionBeingCalled];
+                parameterPtrs = new List<LLVMValueRef>() { VariableManager.GetVariable("this").LLVMPtrValueRef };
+            }
+            else
+            {
+                string errorMessage = String.Format("The {0}function being called {1} was not found in class {2}", isStatic? "static" : String.Empty, functionBeingCalled, className);
+                Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
+                //just assume this function returns a int to avoid stalling the compilation
+                return GetConstantIntRegisterOfClepsType(context, LLVM.Int32TypeInContext(Context), 0, "int");
+            }
+
+            LLVMValueRef[] parameters = parameterPtrs.Select(pp => LLVM.BuildLoad(Builder, pp, "functionParam")).ToArray();
+            LLVMValueRef llvmFunctionBeingCalled = LLVM.GetNamedFunction(Module, fullyQualifiedNameOfFunctionBeingCalled);
+            LLVMValueRef retValue = LLVM.BuildCall(Builder, llvmFunctionBeingCalled, parameters, "retValue");
+            LLVMValueRef retValuePtr = LLVM.BuildAlloca(Builder, LLVM.TypeOf(retValue), "retValuePtr");
+            LLVM.BuildStore(Builder, retValue, retValuePtr);
+
+            LLVMRegister ret = new LLVMRegister(functionType.FunctionReturnType, retValuePtr);
+            return ret;
+        }
+
+        //public override LLVMRegister VisitFunctionVariableAssigmentStatement([NotNull] ClepsParser.FunctionVariableAssigmentStatementContext context)
+        //{
+        //    string variableOrMemberName = context.VariableName.Text;
+        //    string className = String.Join(".", CurrentNamespaceAndClass);
+        //    ClepsClass currentClass = ClassManager.LoadedClassesAndMembers[className];
+        //    LLVMValueRef currFunc = LLVM.GetInsertBlock(Builder).GetBasicBlockParent();
+        //    string currentFunctionName = LLVM.GetValueName(currFunc);
+        //    bool isCurrentFunctionMember = currentClass != null ? currentClass.MemberMethods.ContainsKey(currentFunctionName) : true;
+
+        //    LLVMValueRef registerPtr;
+        //    ClepsType lhsType = null;
+
+        //    if (VariableManager.IsVariableDefined(variableOrMemberName))
+        //    {
+        //        LLVMRegister register = VariableManager.GetVariable(variableOrMemberName);
+        //        registerPtr = register.LLVMPtrValueRef;
+        //        lhsType = register.VariableType;
+        //    }
+        //    else if (isCurrentFunctionMember && currentClass.MemberVariables.ContainsKey(variableOrMemberName))
+        //    {
+        //        LLVMRegister thisInstance = VariableManager.GetVariable("this");
+        //        uint fieldNumber = (uint)currentClass.MemberVariables.Keys.ToList().IndexOf(variableOrMemberName);
+        //        registerPtr = LLVM.BuildStructGEP(Builder, thisInstance.LLVMPtrValueRef, fieldNumber, variableOrMemberName + "FieldPtr");
+        //        lhsType = currentClass.MemberVariables[variableOrMemberName];
+        //    }
+
+        //    if(lhsType == null)
+        //    {
+
+        //    }
+
+        //    string assignmentOperator = context.ASSIGNMENT_OPERATOR().GetText();
+        //}
 
         #endregion Function Statement Implementations
 

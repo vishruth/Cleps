@@ -35,6 +35,18 @@ namespace ClepsCompiler.CompilerHelpers
                 StaticMemberVariables.ContainsKey(memberName) || StaticMemberMethods.ContainsKey(memberName);
         }
 
+        public bool DoesClassContainMember(string memberName, bool isStatic)
+        {
+            if (isStatic)
+            {
+                return StaticMemberVariables.ContainsKey(memberName) || StaticMemberMethods.ContainsKey(memberName);
+            }
+            else
+            {
+                return MemberVariables.ContainsKey(memberName) || MemberMethods.ContainsKey(memberName);
+            }
+        }
+
         public void AddNewMember(string memberName, bool isStatic, ClepsType memberType)
         {
             Debug.Assert(!DoesClassContainMember(memberName));

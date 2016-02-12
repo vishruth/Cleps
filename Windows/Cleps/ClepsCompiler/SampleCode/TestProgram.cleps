@@ -2,7 +2,7 @@
 {
 	public class MainProgram
 	{
-		public static fn Test = fn System.Types.Bool (System.LLVMTypes.I1 @param1)
+		public static fn Test = fn System.Types.Bool ()
 		{
 			System.Types.Int32 @testVar;
 			return false;
@@ -10,8 +10,23 @@
 
 		public static fn Test2 = fn System.LLVMTypes.I1 (System.LLVMTypes.I1 @param1)
 		{
+			Test();
 			return @param1;
 		};
+
+		public fn MemberTest = fn System.Types.Bool ()
+		{
+			System.Types.Int32 @testVar;
+			return false;
+		};
+
+		public fn MemberTest2 = fn System.LLVMTypes.I1 (System.LLVMTypes.I1 @param1)
+		{
+			Test();
+			MemberTest();
+			return @param1;
+		};
+
 
 		public static fn Main = fn System.LLVMTypes.I32 ()
 		{
