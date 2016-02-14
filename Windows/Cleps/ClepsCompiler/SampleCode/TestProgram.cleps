@@ -64,10 +64,7 @@
 			System.Types.Int32 @testVar2;
 			@testVar2 = 51;
 
-			System.Types.Bool @isEqual;
-			@isEqual = @testVar1 == @testVar2;
-
-			if(@isEqual)
+			if(@testVar1 < @testVar2)
 			{
 				@ret = 3;
 			}

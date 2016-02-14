@@ -596,6 +596,22 @@ namespace ClepsCompiler.Compiler
                 {
                     nativeOperator = LLVMIntPredicate.LLVMIntNE;
                 }
+                else if (operatorName == "<=")
+                {
+                    nativeOperator = LLVMIntPredicate.LLVMIntSLE;
+                }
+                else if (operatorName == ">=")
+                {
+                    nativeOperator = LLVMIntPredicate.LLVMIntSGE;
+                }
+                else if (operatorName == "<")
+                {
+                    nativeOperator = LLVMIntPredicate.LLVMIntSLT;
+                }
+                else if (operatorName == ">")
+                {
+                    nativeOperator = LLVMIntPredicate.LLVMIntSGT;
+                }
                 else
                 {
                     string errorMessage = String.Format("The native class {0} does not support operator {1}", expressionClassName, operatorName);

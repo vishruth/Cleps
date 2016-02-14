@@ -44,5 +44,25 @@ namespace System.Types
 		{
 			return RawInteger != @valueToCompare.RawInteger;
 		};
+
+		public operator <= fn System.Types.Bool (System.Types.Int32 @valueToCompare)
+		{
+			return RawInteger <= @valueToCompare.RawInteger;
+		};
+
+		public operator >= fn System.Types.Bool (System.Types.Int32 @valueToCompare)
+		{
+			return RawInteger >= @valueToCompare.RawInteger;
+		};
+
+		public operator < fn System.Types.Bool (System.Types.Int32 @valueToCompare)
+		{
+			return RawInteger < @valueToCompare.RawInteger;
+		};
+
+		public operator > fn System.Types.Bool (System.Types.Int32 @valueToCompare)
+		{
+			return RawInteger > @valueToCompare.RawInteger;
+		};
 	}
 }
