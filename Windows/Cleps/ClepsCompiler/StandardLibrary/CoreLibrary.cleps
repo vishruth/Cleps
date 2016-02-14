@@ -14,7 +14,8 @@ namespace System.Types
 		public System.LLVMTypes.I32 RawInteger;
 
 		public assignment = fn void (System.Types.Int32 @valueToCopy)
-		{	
+		{
+			RawInteger = @valueToCopy.RawInteger;
 			return;
 		};
 	}

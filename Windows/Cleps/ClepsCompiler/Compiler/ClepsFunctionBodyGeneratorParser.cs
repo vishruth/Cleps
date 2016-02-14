@@ -309,6 +309,11 @@ namespace ClepsCompiler.Compiler
             ClepsType functionType;
             List<LLVMValueRef> parameterPtrs;
 
+            if(context.functionCall()._FunctionParameters.Count > 0)
+            {
+                throw new NotImplementedException("Passing parameters to functions is not yet supported");
+            }
+
             if (ClassManager.DoesClassContainMember(className, functionBeingCalled, true /* check static members */))
             {
                 fullyQualifiedNameOfFunctionBeingCalled = String.Format("{0}.{1}", className, functionBeingCalled);
@@ -339,39 +344,126 @@ namespace ClepsCompiler.Compiler
             return ret;
         }
 
-        //public override LLVMRegister VisitFunctionVariableAssigmentStatement([NotNull] ClepsParser.FunctionVariableAssigmentStatementContext context)
-        //{
-        //    string variableOrMemberName = context.VariableName.Text;
-        //    string className = String.Join(".", CurrentNamespaceAndClass);
-        //    ClepsClass currentClass = ClassManager.LoadedClassesAndMembers[className];
-        //    LLVMValueRef currFunc = LLVM.GetInsertBlock(Builder).GetBasicBlockParent();
-        //    string currentFunctionName = LLVM.GetValueName(currFunc);
-        //    bool isCurrentFunctionMember = currentClass != null ? currentClass.MemberMethods.ContainsKey(currentFunctionName) : true;
+        public override LLVMRegister VisitFunctionVariableAssigmentStatement([NotNull] ClepsParser.FunctionVariableAssigmentStatementContext context)
+        {
+            string variableName = context.variable().VariableName.Text;
 
-        //    LLVMValueRef registerPtr;
-        //    ClepsType lhsType = null;
+            if (!VariableManager.IsVariableDefined(variableName))
+            {
+                string errorMessage = String.Format("The variable {0} was not defined", variableName);
+                Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
+                return null;
+            }
 
-        //    if (VariableManager.IsVariableDefined(variableOrMemberName))
-        //    {
-        //        LLVMRegister register = VariableManager.GetVariable(variableOrMemberName);
-        //        registerPtr = register.LLVMPtrValueRef;
-        //        lhsType = register.VariableType;
-        //    }
-        //    else if (isCurrentFunctionMember && currentClass.MemberVariables.ContainsKey(variableOrMemberName))
-        //    {
-        //        LLVMRegister thisInstance = VariableManager.GetVariable("this");
-        //        uint fieldNumber = (uint)currentClass.MemberVariables.Keys.ToList().IndexOf(variableOrMemberName);
-        //        registerPtr = LLVM.BuildStructGEP(Builder, thisInstance.LLVMPtrValueRef, fieldNumber, variableOrMemberName + "FieldPtr");
-        //        lhsType = currentClass.MemberVariables[variableOrMemberName];
-        //    }
+            LLVMRegister variablePtrRegister = VariableManager.GetVariable(variableName);
+            LLVMRegister assignmentValuePtrRegister = Visit(context.rightHandExpression());
+            string assignmentOperator = context.ASSIGNMENT_OPERATOR().GetText();
+            return GenerateAssignmentToRegister(context, variablePtrRegister, assignmentValuePtrRegister, assignmentOperator);
+        }
 
-        //    if(lhsType == null)
-        //    {
+        private LLVMRegister GenerateAssignmentToRegister(ParserRuleContext context, LLVMRegister targetPtrRegister, LLVMRegister assignmentValuePtrRegister, string assignmentOperator)
+        {            
+            string targetClassName = targetPtrRegister.VariableType.RawTypeName;
+            LLVMValueRef assignmentValue = LLVM.BuildLoad(Builder, assignmentValuePtrRegister.LLVMPtrValueRef, "assignmentValue");
 
-        //    }
+            if (ClepsLLVMTypeConvertorInst.IsPrimitiveLLVMType(targetPtrRegister.VariableType))
+            {
+                //if it is a primitive llvmType, the assignment operators are hardcoded
+                //only the = assignment operator is supported for primitive llvm types
 
-        //    string assignmentOperator = context.ASSIGNMENT_OPERATOR().GetText();
-        //}
+                if(assignmentOperator != "=")
+                {
+                    string errorMessage = String.Format("Primitive class {0} does not have assignment operator {1} defined. = is the only assignment operator allowed", targetClassName, assignmentOperator);
+                    Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
+                    return null;
+                }
+
+                if(targetPtrRegister.VariableType != assignmentValuePtrRegister.VariableType)
+                {
+                    string errorMessage = String.Format("Value of type {0} cannot be assigned to variable of type {1}", assignmentValuePtrRegister.VariableType, targetPtrRegister.VariableType);
+                    Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
+                    return null;
+                }
+
+                LLVM.BuildStore(Builder, assignmentValue, targetPtrRegister.LLVMPtrValueRef);
+                return null;
+            }
+            else
+            {
+                ClepsClass variableClass = ClassManager.LoadedClassesAndMembers[targetClassName];
+                if (!variableClass.MemberMethods.ContainsKey(assignmentOperator))
+                {
+                    string errorMessage = String.Format("The class {0} does not have assignment operator {1} defined", targetClassName, assignmentOperator);
+                    Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
+                    return null;
+                }
+
+                ClepsType assignmentFunctionToCall = variableClass.MemberMethods[assignmentOperator];
+                if (assignmentFunctionToCall.FunctionParameters.Count != 2 && assignmentFunctionToCall.FunctionParameters[1] != assignmentValuePtrRegister.VariableType)
+                {
+                    string errorMessage = String.Format("The class {0} does not have an assignment operator {1} defined that takes parameter {2}", targetClassName, assignmentOperator, assignmentValuePtrRegister.VariableType);
+                    Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
+                    return null;
+                }
+
+                string assignmentFunctionNameToCall = String.Format("{0}.{1}", targetClassName, assignmentOperator);
+                LLVMValueRef llvmAssignmentFunction = LLVM.GetNamedFunction(Module, assignmentFunctionNameToCall);
+                LLVMValueRef[] parameters = new LLVMValueRef[] { targetPtrRegister.LLVMPtrValueRef, assignmentValue };
+                LLVM.BuildCall(Builder, llvmAssignmentFunction, parameters, "");
+                return null;
+            }
+        }
+
+        public override LLVMRegister VisitFunctionFieldAssignmentStatement([NotNull] ClepsParser.FunctionFieldAssignmentStatementContext context)
+        {
+            if (context.LeftExpression != null)
+            {
+                throw new NotImplementedException("Expressions on the left hand side not yet supported");
+            }
+
+            string memberName = context.FieldName.GetText();
+            string className = String.Join(".", CurrentNamespaceAndClass);
+            string fullFunctionName = String.Join(".", FunctionHierarchy);
+
+            if (!ClassManager.DoesClassContainMember(className, memberName))
+            {
+                string errorMessage = String.Format("The class {0} does not have a member names {1}", className, memberName);
+                Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
+                return null;
+            }
+
+            bool iscurrFuncStatic = ClassManager.DoesClassContainMember(className, fullFunctionName, true /* search for static members */);
+            bool isMemberStatic = ClassManager.DoesClassContainMember(className, memberName, true /* search for static members */);
+
+            if (iscurrFuncStatic && !isMemberStatic)
+            {
+                string errorMessage = String.Format("Static function {0} cannot access the non static member {1}", fullFunctionName, memberName);
+                Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
+                return null;
+            }
+
+            LLVMRegister memberPtrRegister;
+            if (isMemberStatic)
+            {
+                string fullyQualifiedMemberName = String.Join(".", className, memberName);
+                LLVMValueRef memberPtr = LLVM.GetNamedGlobal(Module, fullyQualifiedMemberName);
+                ClepsType memberType = ClassManager.LoadedClassesAndMembers[className].StaticMemberVariables[memberName];
+                memberPtrRegister = new LLVMRegister(memberType, memberPtr);
+            }
+            else
+            {
+                LLVMRegister thisPtr = VariableManager.GetVariable("this");
+                LLVMValueRef thisVar = LLVM.BuildLoad(Builder, thisPtr.LLVMPtrValueRef, "this");
+                uint fieldNumber = (uint)ClassManager.LoadedClassesAndMembers[className].MemberVariables.Keys.ToList().IndexOf(memberName);
+                LLVMValueRef memberPtr = LLVM.BuildStructGEP(Builder, thisVar, fieldNumber, memberName + "Field");
+                ClepsType memberType = ClassManager.LoadedClassesAndMembers[className].MemberVariables[memberName];
+                memberPtrRegister = new LLVMRegister(memberType, memberPtr);
+            }
+
+            LLVMRegister assignmentValuePtrRegister = Visit(context.RightExpression);
+            string assignmentOperator = context.ASSIGNMENT_OPERATOR().GetText();
+            return GenerateAssignmentToRegister(context, memberPtrRegister, assignmentValuePtrRegister, assignmentOperator);
+        }
 
         #endregion Function Statement Implementations
 
@@ -386,6 +478,40 @@ namespace ClepsCompiler.Compiler
             string variableName = context.variable().VariableName.Text;
             LLVMRegister ret = VariableManager.GetVariable(variableName);
             return ret;
+        }
+
+        public override LLVMRegister VisitFieldAccessOnExpression([NotNull] ClepsParser.FieldAccessOnExpressionContext context)
+        {
+            string memberName = context.FieldName.GetText();
+            LLVMRegister targetRegister = Visit(context.rightHandExpression());
+            string className = targetRegister.VariableType.RawTypeName;
+
+            if (!ClassManager.DoesClassContainMember(className, memberName))
+            {
+                string errorMessage = String.Format("The class {0} does not have a member names {1}", className, memberName);
+                Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
+                return null;
+            }
+
+            bool isMemberStatic = ClassManager.DoesClassContainMember(className, memberName, true /* search for static members */);
+
+            LLVMRegister memberPtrRegister;
+            if (isMemberStatic)
+            {
+                string fullyQualifiedMemberName = String.Join(".", className, memberName);
+                LLVMValueRef memberPtr = LLVM.GetNamedGlobal(Module, fullyQualifiedMemberName);
+                ClepsType memberType = ClassManager.LoadedClassesAndMembers[className].StaticMemberVariables[memberName];
+                memberPtrRegister = new LLVMRegister(memberType, memberPtr);
+            }
+            else
+            {
+                uint fieldNumber = (uint)ClassManager.LoadedClassesAndMembers[className].MemberVariables.Keys.ToList().IndexOf(memberName);
+                LLVMValueRef memberPtr = LLVM.BuildStructGEP(Builder, targetRegister.LLVMPtrValueRef, fieldNumber, memberName + "Field");
+                ClepsType memberType = ClassManager.LoadedClassesAndMembers[className].MemberVariables[memberName];
+                memberPtrRegister = new LLVMRegister(memberType, memberPtr);
+            }
+
+            return memberPtrRegister;
         }
 
         public override LLVMRegister VisitNumericAssignments([NotNull] ClepsParser.NumericAssignmentsContext context)

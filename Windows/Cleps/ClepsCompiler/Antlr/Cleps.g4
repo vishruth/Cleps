@@ -103,7 +103,7 @@ functionReturnStatement : RETURN rightHandExpression? END;
 functionVariableDeclarationStatement : variableDeclarationStatement;
 variableDeclarationStatement : typename variable (ASSIGNMENT_OPERATOR rightHandExpression)? END;
 functionVariableAssigmentStatement : variable ASSIGNMENT_OPERATOR rightHandExpression END;
-functionFieldAssignmentStatement : LeftExpression=rightHandExpression '.' FieldName=classOrMemberName ASSIGNMENT_OPERATOR RightExpression=rightHandExpression END;
+functionFieldAssignmentStatement : (LeftExpression=rightHandExpression '.')? FieldName=classOrMemberName ASSIGNMENT_OPERATOR RightExpression=rightHandExpression END;
 
 functionDeclarationStatement : FUNC FunctionName=classOrMemberName (ASSIGNMENT_OPERATOR FUNC FunctionReturnType=typenameAndVoid '(' functionParametersList ')' statementBlock)? END;
 assignmentFunctionDeclarationStatement : ASSIGNMENT FunctionName=ASSIGNMENT_OPERATOR FUNC FunctionReturnType=typenameAndVoid '(' functionParametersList ')' statementBlock END;

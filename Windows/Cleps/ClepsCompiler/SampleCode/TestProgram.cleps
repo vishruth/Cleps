@@ -27,8 +27,7 @@
 			return @param1;
 		};
 
-
-		public static fn Main = fn System.LLVMTypes.I32 ()
+		public static fn MainWithNativeType = fn System.LLVMTypes.I32 ()
 		{
 			System.Types.Bool @testVar;
 
@@ -44,13 +43,16 @@
 				System.Types.Bool @innerVar;
 			}
 
-			return 2ni;
+			System.LLVMTypes.I32 @llvmInt;
+			@llvmInt = 2ni;
+			return @llvmInt;
 		};
 
-		public static fn MainWithClepsType = fn System.Types.Int32 ()
+		public static fn Main = fn System.Types.Int32 ()
 		{
 			System.Types.Int32 @testVar;
-			return 0;
+			@testVar = 5;
+			return @testVar;
 		};
 	}
 }

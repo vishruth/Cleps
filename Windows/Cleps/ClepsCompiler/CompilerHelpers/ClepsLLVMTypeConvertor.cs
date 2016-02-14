@@ -21,6 +21,11 @@ namespace ClepsCompiler.CompilerHelpers
             ClassSkeletons = classSkeletons;
         }
 
+        public bool IsPrimitiveLLVMType(ClepsType clepsType)
+        {
+            return GetPrimitiveLLVMTypeOrNull(clepsType) != null;
+        }
+
         public LLVMTypeRef? GetPrimitiveLLVMTypeOrNull(ClepsType clepsType)
         {
             if (clepsType.IsFunctionType)
