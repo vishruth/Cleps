@@ -54,6 +54,12 @@ namespace ClepsCompiler.Compiler
 
         public override int VisitClassDeclarationStatements([NotNull] ClepsParser.ClassDeclarationStatementsContext context)
         {
+            if (context.ClassName == null)
+            {
+                //Some antlr parsing exception has occurred. Just exit.
+                return -1;
+            }
+
             CurrentNamespaceAndClass.Add(context.ClassName.GetText());
 
             string className = String.Join(".", CurrentNamespaceAndClass);
@@ -134,10 +140,11 @@ namespace ClepsCompiler.Compiler
         {
             bool isStatic = context.STATIC() != null;
             var functionDeclarationContext = context.functionDeclarationStatement();
-            string functionName = functionDeclarationContext.FunctionName.GetText();
+            string functionName = functionDeclarationContext.FunctionName.Name.Text;
             ClepsParser.TypenameAndVoidContext functionReturnContext = functionDeclarationContext.FunctionReturnType;
+            ClepsType clepsReturnType = ClepsType.GetBasicOrVoidType(functionReturnContext);
             ClepsParser.FunctionParametersListContext parameterContext = functionDeclarationContext.functionParametersList();
-            var ret = GenerateMemberFunction(context, isStatic, functionName, functionReturnContext, parameterContext);
+            var ret = GenerateMemberFunction(context, isStatic, functionName, clepsReturnType, parameterContext);
             return ret;
         }
 
@@ -146,22 +153,24 @@ namespace ClepsCompiler.Compiler
             bool isStatic = context.STATIC() != null;
             var assignmentFunctionDeclarationStatement = context.assignmentFunctionDeclarationStatement();
             string functionName = assignmentFunctionDeclarationStatement.FunctionName.Text;
-            ClepsParser.TypenameAndVoidContext functionReturnContext = assignmentFunctionDeclarationStatement.FunctionReturnType;
             ClepsParser.FunctionParametersListContext parameterContext = assignmentFunctionDeclarationStatement.functionParametersList();
-
-            if (!ClepsType.GetBasicOrVoidType(functionReturnContext).IsVoidType)
-            {
-                string errorMessage = "Assignment operator definitions should have a void return type";
-                Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
-                //Don't process this member
-                return -1;
-            }
-
-            var ret = GenerateMemberFunction(context, isStatic, functionName, functionReturnContext, parameterContext);
+            var ret = GenerateMemberFunction(context, isStatic, functionName, ClepsType.GetVoidType(), parameterContext);
             return ret;
         }
 
-        private int GenerateMemberFunction(ParserRuleContext context, bool isStatic, string functionName, ClepsParser.TypenameAndVoidContext functionReturnContext, ClepsParser.FunctionParametersListContext parameterContext)
+        public override int VisitMemberOperatorFunctionDeclarationStatement([NotNull] ClepsParser.MemberOperatorFunctionDeclarationStatementContext context)
+        {
+            bool isStatic = context.STATIC() != null;
+            var assignmentFunctionDeclarationStatement = context.operatorFunctionDeclarationStatment();
+            string functionName = assignmentFunctionDeclarationStatement.FunctionName.Text;
+            ClepsParser.TypenameContext functionReturnContext = assignmentFunctionDeclarationStatement.FunctionReturnType;
+            ClepsType clepsReturnType = ClepsType.GetBasicType(functionReturnContext);
+            ClepsParser.FunctionParametersListContext parameterContext = assignmentFunctionDeclarationStatement.functionParametersList();
+            var ret = GenerateMemberFunction(context, isStatic, functionName, clepsReturnType, parameterContext);
+            return ret;
+        }
+
+        private int GenerateMemberFunction(ParserRuleContext context, bool isStatic, string functionName, ClepsType clepsReturnType, ClepsParser.FunctionParametersListContext parameterContext)
         {
             string className = String.Join(".", CurrentNamespaceAndClass);
             FunctionHierarchy.Add(functionName);
@@ -176,7 +185,6 @@ namespace ClepsCompiler.Compiler
                 return -1;
             }
 
-            ClepsType clepsReturnType = ClepsType.GetBasicOrVoidType(functionReturnContext);
             List<ClepsType> clepsParameterTypes = parameterContext._FunctionParameterTypes.Select(t => ClepsType.GetBasicType(t)).ToList();
             if(!isStatic)
             {
@@ -213,7 +221,7 @@ namespace ClepsCompiler.Compiler
         {
             string className = String.Join(".", CurrentNamespaceAndClass);
             bool isStatic = context.STATIC() != null;
-            string variableName = context.FieldName.GetText();
+            string variableName = context.FieldName.Name.Text;
 
             if (ClassManager.DoesClassContainMember(className, variableName))
             {

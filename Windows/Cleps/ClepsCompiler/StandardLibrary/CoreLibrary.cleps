@@ -11,6 +11,16 @@ namespace System.Types
 			RawBoolean = @valueToCopy.RawBoolean;
 			return;
 		};
+
+		public operator == fn System.Types.Bool (System.Types.Bool @valueToCompare)
+		{
+			return RawBoolean == @valueToCompare.RawBoolean;
+		};
+
+		public operator != fn System.Types.Bool (System.Types.Bool @valueToCompare)
+		{
+			return RawBoolean != @valueToCompare.RawBoolean;
+		};
 	}
 
 	public class Int32
@@ -23,6 +33,16 @@ namespace System.Types
 		{
 			RawInteger = @valueToCopy.RawInteger;
 			return;
+		};
+
+		public operator == fn System.Types.Bool (System.Types.Int32 @valueToCompare)
+		{
+			return RawInteger == @valueToCompare.RawInteger;
+		};
+
+		public operator != fn System.Types.Bool (System.Types.Int32 @valueToCompare)
+		{
+			return RawInteger != @valueToCompare.RawInteger;
 		};
 	}
 }

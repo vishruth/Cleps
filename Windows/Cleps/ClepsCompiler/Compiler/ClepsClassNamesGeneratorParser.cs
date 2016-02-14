@@ -52,6 +52,12 @@ namespace ClepsCompiler.Compiler
 
         public override int VisitClassDeclarationStatements([NotNull] ClepsParser.ClassDeclarationStatementsContext context)
         {
+            if(context.ClassName == null)
+            {
+                //Some antlr parsing exception has occurred. Just exit.
+                return -1;
+            }
+
             CurrentNamespaceAndClass.Add(context.ClassName.GetText());
 
             string className = String.Join(".", CurrentNamespaceAndClass);

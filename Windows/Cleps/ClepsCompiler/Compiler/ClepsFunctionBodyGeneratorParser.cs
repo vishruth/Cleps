@@ -56,6 +56,12 @@ namespace ClepsCompiler.Compiler
 
         public override LLVMRegister VisitClassDeclarationStatements([NotNull] ClepsParser.ClassDeclarationStatementsContext context)
         {
+            if (context.ClassName == null)
+            {
+                //Some antlr parsing exception has occurred. Just exit.
+                return null;
+            }
+
             CurrentNamespaceAndClass.Add(context.ClassName.GetText());
 
             string className = String.Join(".", CurrentNamespaceAndClass);
@@ -71,28 +77,38 @@ namespace ClepsCompiler.Compiler
             return ret;
         }
 
-        public override LLVMRegister VisitMemberAssignmentFunctionDeclarationStatement([NotNull] ClepsParser.MemberAssignmentFunctionDeclarationStatementContext context)
-        {
-            bool isStatic = context.STATIC() != null;
-            ClepsParser.TypenameAndVoidContext returnTypeContext = context.assignmentFunctionDeclarationStatement().FunctionReturnType;
-            ClepsParser.FunctionParametersListContext parametersContext = context.assignmentFunctionDeclarationStatement().functionParametersList();
-            string functionName = context.assignmentFunctionDeclarationStatement().FunctionName.Text;
-            return VisitFunctionDeclarationBody(context, returnTypeContext, parametersContext, functionName, isStatic);
-        }
-
         public override LLVMRegister VisitMemberFunctionDeclarationStatement([NotNull] ClepsParser.MemberFunctionDeclarationStatementContext context)
         {
             bool isStatic = context.STATIC() != null;
             ClepsParser.TypenameAndVoidContext returnTypeContext = context.functionDeclarationStatement().FunctionReturnType;
+            ClepsType clepsReturnType = ClepsType.GetBasicOrVoidType(returnTypeContext);
             ClepsParser.FunctionParametersListContext parametersContext = context.functionDeclarationStatement().functionParametersList();
             string functionName = context.functionDeclarationStatement().FunctionName.GetText();
-            return VisitFunctionDeclarationBody(context, returnTypeContext, parametersContext, functionName, isStatic);
+            return VisitFunctionDeclarationBody(context, clepsReturnType, parametersContext, functionName, isStatic);
+        }
+
+        public override LLVMRegister VisitMemberAssignmentFunctionDeclarationStatement([NotNull] ClepsParser.MemberAssignmentFunctionDeclarationStatementContext context)
+        {
+            bool isStatic = context.STATIC() != null;
+            ClepsParser.FunctionParametersListContext parametersContext = context.assignmentFunctionDeclarationStatement().functionParametersList();
+            string functionName = context.assignmentFunctionDeclarationStatement().FunctionName.Text;
+            return VisitFunctionDeclarationBody(context, ClepsType.GetVoidType(), parametersContext, functionName, isStatic);
+        }
+
+        public override LLVMRegister VisitMemberOperatorFunctionDeclarationStatement([NotNull] ClepsParser.MemberOperatorFunctionDeclarationStatementContext context)
+        {
+            bool isStatic = context.STATIC() != null;
+            ClepsParser.TypenameContext returnTypeContext = context.operatorFunctionDeclarationStatment().FunctionReturnType;
+            ClepsType clepsReturnType = ClepsType.GetBasicType(returnTypeContext);
+            ClepsParser.FunctionParametersListContext parametersContext = context.operatorFunctionDeclarationStatment().functionParametersList();
+            string functionName = context.operatorFunctionDeclarationStatment().FunctionName.Text;
+            return VisitFunctionDeclarationBody(context, clepsReturnType, parametersContext, functionName, isStatic);
         }
 
         private LLVMRegister VisitFunctionDeclarationBody
         (
             Antlr4.Runtime.ParserRuleContext context,
-            ClepsParser.TypenameAndVoidContext returnTypeContext,
+            ClepsType clepsReturnType,
             ClepsParser.FunctionParametersListContext parametersContext,
             string functionName,
             bool isStatic
@@ -115,7 +131,6 @@ namespace ClepsCompiler.Compiler
 
             VariableManager.AddBlock();
 
-            ClepsType clepsReturnType = ClepsType.GetBasicOrVoidType(returnTypeContext);
             List<string> paramNames = parametersContext._FunctionParameterNames.Select(p => p.VariableName.Text).ToList();
             List<ClepsType> clepsParameterTypes = parametersContext._FunctionParameterTypes.Select(t => ClepsType.GetBasicType(t)).ToList();
 
@@ -421,13 +436,13 @@ namespace ClepsCompiler.Compiler
                 throw new NotImplementedException("Expressions on the left hand side not yet supported");
             }
 
-            string memberName = context.FieldName.GetText();
+            string memberName = context.FieldName.Name.Text;
             string className = String.Join(".", CurrentNamespaceAndClass);
             string fullFunctionName = String.Join(".", FunctionHierarchy);
 
             if (!ClassManager.DoesClassContainMember(className, memberName))
             {
-                string errorMessage = String.Format("The class {0} does not have a member names {1}", className, memberName);
+                string errorMessage = String.Format("The class {0} does not have a member named {1}", className, memberName);
                 Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
                 return null;
             }
@@ -482,17 +497,33 @@ namespace ClepsCompiler.Compiler
 
         public override LLVMRegister VisitFieldAccessOnExpression([NotNull] ClepsParser.FieldAccessOnExpressionContext context)
         {
-            string memberName = context.FieldName.GetText();
+            string memberName = context.FieldName.Name.Text;
             LLVMRegister targetRegister = Visit(context.rightHandExpression());
             string className = targetRegister.VariableType.RawTypeName;
 
             if (!ClassManager.DoesClassContainMember(className, memberName))
             {
-                string errorMessage = String.Format("The class {0} does not have a member name {1}", className, memberName);
+                string errorMessage = String.Format("The class {0} does not have a member named {1}", className, memberName);
                 Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
-                return null;
+                //just assume this is operation returns a constant int to avoid stalling the compilation
+                LLVMRegister errRet = GetConstantIntRegisterOfClepsType(context, LLVM.Int32TypeInContext(Context), 5, "int32" /* friendly type name */);
+                return errRet;
             }
 
+            LLVMRegister ret = GetClassMember(className, memberName, targetRegister.LLVMPtrValueRef);
+            return ret;
+        }
+
+        /// <summary>
+        /// Retrieves a register pointing to the static or non-static member field of a class
+        /// If retrieving a non static member, the object register ptr should be passed in targetRegister
+        /// </summary>
+        /// <param name="className"></param>
+        /// <param name="memberName"></param>
+        /// <param name="targetRegister"></param>
+        /// <returns></returns>
+        private LLVMRegister GetClassMember(string className, string memberName, LLVMValueRef targetRegister)
+        {
             bool isMemberStatic = ClassManager.DoesClassContainMember(className, memberName, true /* search for static members */);
 
             LLVMRegister memberPtrRegister;
@@ -506,12 +537,122 @@ namespace ClepsCompiler.Compiler
             else
             {
                 uint fieldNumber = (uint)ClassManager.LoadedClassesAndMembers[className].MemberVariables.Keys.ToList().IndexOf(memberName);
-                LLVMValueRef memberPtr = LLVM.BuildStructGEP(Builder, targetRegister.LLVMPtrValueRef, fieldNumber, memberName + "Field");
+                LLVMValueRef memberPtr = LLVM.BuildStructGEP(Builder, targetRegister, fieldNumber, memberName + "Field");
                 ClepsType memberType = ClassManager.LoadedClassesAndMembers[className].MemberVariables[memberName];
                 memberPtrRegister = new LLVMRegister(memberType, memberPtr);
             }
 
             return memberPtrRegister;
+        }
+
+        public override LLVMRegister VisitFieldOrClassAssignment([NotNull] ClepsParser.FieldOrClassAssignmentContext context)
+        {
+            string memberName = context.classOrMemberName().Name.Text;
+            string className = String.Join(".", CurrentNamespaceAndClass);
+
+            if (ClassManager.DoesClassContainMember(className, memberName))
+            {
+                LLVMRegister thisPtr = VariableManager.GetVariable("this");
+                LLVMValueRef thisVar = LLVM.BuildLoad(Builder, thisPtr.LLVMPtrValueRef, "this");
+                LLVMRegister ret = GetClassMember(className, memberName, thisVar);
+                return ret;
+            }
+            else if(ClassManager.IsClassLoaded(className))
+            {
+                //get the class type
+                throw new NotImplementedException("Class types are not yet supported");
+            }
+            else
+            {
+                string errorMessage = String.Format("No Class or Field named {0} exists", memberName);
+                Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
+                //just assume this is operation returns a constant int to avoid stalling the compilation
+                LLVMRegister ret = GetConstantIntRegisterOfClepsType(context, LLVM.Int32TypeInContext(Context), 11, "int32" /* friendly type name */);
+                return ret;
+            }            
+        }
+
+        public override LLVMRegister VisitBinaryOperatorOnExpression([NotNull] ClepsParser.BinaryOperatorOnExpressionContext context)
+        {
+            LLVMRegister leftExpression = Visit(context.LeftExpression);
+            LLVMRegister rightExpression = Visit(context.RightExpression);
+
+            if(leftExpression.VariableType != rightExpression.VariableType)
+            {
+                throw new NotImplementedException("Operators on different types are not yet supported");
+            }
+
+            string expressionClassName = leftExpression.VariableType.RawTypeName;
+            string operatorName = context.OPERATOR_SYMBOL().GetText();
+
+            if (ClepsLLVMTypeConvertorInst.IsPrimitiveLLVMType(leftExpression.VariableType))
+            {
+                LLVMIntPredicate nativeOperator;
+                if (operatorName == "==")
+                {
+                    nativeOperator = LLVMIntPredicate.LLVMIntEQ;
+                }
+                else if (operatorName == "!=")
+                {
+                    nativeOperator = LLVMIntPredicate.LLVMIntNE;
+                }
+                else
+                {
+                    string errorMessage = String.Format("The native class {0} does not support operator {1}", expressionClassName, operatorName);
+                    Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
+                    //just assume this is operation returns a constant int to avoid stalling the compilation
+                    LLVMRegister ret = GetConstantIntRegisterOfClepsType(context, LLVM.Int32TypeInContext(Context), 7, "int32" /* friendly type name */);
+                    return ret;
+                }
+
+                LLVMValueRef leftValue = LLVM.BuildLoad(Builder, leftExpression.LLVMPtrValueRef, "leftValue");
+                LLVMValueRef rightValue = LLVM.BuildLoad(Builder, rightExpression.LLVMPtrValueRef, "rightValue");
+                LLVMValueRef isEqual = LLVM.BuildICmp(Builder, nativeOperator, leftValue, rightValue, "nativeIsEqual");
+                LLVMRegister operatorRet = GetIntRegisterOfClepsType(context, LLVM.Int1TypeInContext(Context), isEqual, "bool");
+                return operatorRet;
+            }
+            else
+            {
+                if (!ClassManager.LoadedClassesAndMembers[expressionClassName].DoesClassContainMember(operatorName, false /* search member types only */))
+                {
+                    string errorMessage = String.Format("The class {0} does not have a operator {1} defined", expressionClassName, operatorName);
+                    Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
+                    //just assume this is operation returns a constant int to avoid stalling the compilation
+                    LLVMRegister ret = GetConstantIntRegisterOfClepsType(context, LLVM.Int32TypeInContext(Context), 7, "int32" /* friendly type name */);
+                    return ret;
+                }
+
+                ClepsClass variableClass = ClassManager.LoadedClassesAndMembers[expressionClassName];
+                if (!variableClass.MemberMethods.ContainsKey(operatorName))
+                {
+                    string errorMessage = String.Format("The class {0} does not have operator {1} defined", expressionClassName, operatorName);
+                    Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
+                    //just assume this is operation returns a constant int to avoid stalling the compilation
+                    LLVMRegister ret = GetConstantIntRegisterOfClepsType(context, LLVM.Int32TypeInContext(Context), 7, "int32" /* friendly type name */);
+                    return ret;
+                }
+
+                ClepsType assignmentFunctionToCall = variableClass.MemberMethods[operatorName];
+                if (assignmentFunctionToCall.FunctionParameters.Count != 3 && assignmentFunctionToCall.FunctionParameters[1] != leftExpression.VariableType && assignmentFunctionToCall.FunctionParameters[2] != rightExpression.VariableType)
+                {
+                    string errorMessage = String.Format("The class {0} does not have an operator {1} defined that takes parameter ({2}, {3})", expressionClassName, operatorName, leftExpression.VariableType, rightExpression.VariableType);
+                    Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
+                    //just assume this is operation returns a constant int to avoid stalling the compilation
+                    LLVMRegister ret = GetConstantIntRegisterOfClepsType(context, LLVM.Int32TypeInContext(Context), 7, "int32" /* friendly type name */);
+                    return ret;
+                }
+
+                string assignmentFunctionNameToCall = String.Format("{0}.{1}", expressionClassName, operatorName);
+                LLVMValueRef llvmAssignmentFunction = LLVM.GetNamedFunction(Module, assignmentFunctionNameToCall);
+                LLVMValueRef operatorArg = LLVM.BuildLoad(Builder, rightExpression.LLVMPtrValueRef, "operatorArg");
+                LLVMValueRef[] parameters = new LLVMValueRef[] { leftExpression.LLVMPtrValueRef, operatorArg };
+                LLVMValueRef operatorReturnRegister = LLVM.BuildCall(Builder, llvmAssignmentFunction, parameters, "operator" + operatorName + "Call");
+                LLVMValueRef operatorReturnPtr = LLVM.BuildAlloca(Builder, LLVM.TypeOf(operatorReturnRegister), "operatorReturnPtr");
+                LLVM.BuildStore(Builder, operatorReturnRegister, operatorReturnPtr);
+                ClepsType returnType = assignmentFunctionToCall.FunctionReturnType;
+                LLVMRegister operatorReturn = new LLVMRegister(returnType, operatorReturnPtr);
+                return operatorReturn;
+            }
         }
 
         public override LLVMRegister VisitNumericAssignments([NotNull] ClepsParser.NumericAssignmentsContext context)
@@ -561,7 +702,7 @@ namespace ClepsCompiler.Compiler
 
         /// <summary>
         /// Return an LLVM variable defined on the stack. 
-        /// The value of the initialized to this variable needs to be a constant bool, int or long
+        /// The value of the initialized to this variable needs to be a constant bool, int or long.
         /// This native llvm type is then mapped to the appropriate cleps type (which is specified in code by the rawtypemap statement) and returned
         /// </summary>
         /// <param name="context"></param>
@@ -569,6 +710,22 @@ namespace ClepsCompiler.Compiler
         /// <param name="value"></param>
         /// <returns></returns>
         private LLVMRegister GetConstantIntRegisterOfClepsType(ParserRuleContext context, LLVMTypeRef llvmType, ulong value, string friendlyTypeName)
+        {
+            LLVMValueRef register = LLVM.ConstInt(llvmType, value, false);
+            LLVMRegister ret = GetIntRegisterOfClepsType(context, llvmType, register, friendlyTypeName);
+            return ret;
+        }
+
+        /// <summary>
+        /// Return an LLVM variable defined on the stack. 
+        /// The value of the initialized to this variable needs to be a stored in a register.
+        /// This native llvm type is then mapped to the appropriate cleps type (which is specified in code by the rawtypemap statement) and returned
+        /// </summary>
+        /// <param name="context"></param>
+        /// <param name="llvmType"></param>
+        /// <param name="value"></param>
+        /// <returns></returns>
+        private LLVMRegister GetIntRegisterOfClepsType(ParserRuleContext context, LLVMTypeRef llvmType, LLVMValueRef register, string friendlyTypeName)
         {
             ClepsType clepsType = ClepsLLVMTypeConvertorInst.GetClepsNativeLLVMType(llvmType);
 
@@ -580,7 +737,6 @@ namespace ClepsCompiler.Compiler
                 return null;
             }
 
-            LLVMValueRef register = LLVM.ConstInt(llvmType, value, false);
             ClepsType mappedClassType = ClepsType.GetBasicType(mappedClass.FullyQualifiedName, 0);
 
             LLVMValueRef? instPtr = CallConstructorAllocaForType(context, mappedClassType, friendlyTypeName + "Inst");
