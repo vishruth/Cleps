@@ -5,6 +5,12 @@ namespace System.Types
 		rawtypemap System.LLVMTypes.I1;
 
 		public System.LLVMTypes.I1 RawBoolean;
+
+		public assignment = fn void (System.Types.Bool @valueToCopy)
+		{
+			RawBoolean = @valueToCopy.RawBoolean;
+			return;
+		};
 	}
 
 	public class Int32

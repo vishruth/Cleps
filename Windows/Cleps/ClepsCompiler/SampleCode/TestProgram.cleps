@@ -34,6 +34,7 @@
 			if(@testVar)
 			{
 				System.Types.Bool @innerVar;
+				@innerVar = false;
 			}
 
 			System.LLVMTypes.I1 @testNativeVar;

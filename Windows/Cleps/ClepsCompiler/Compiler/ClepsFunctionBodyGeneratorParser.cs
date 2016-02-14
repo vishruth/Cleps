@@ -488,7 +488,7 @@ namespace ClepsCompiler.Compiler
 
             if (!ClassManager.DoesClassContainMember(className, memberName))
             {
-                string errorMessage = String.Format("The class {0} does not have a member names {1}", className, memberName);
+                string errorMessage = String.Format("The class {0} does not have a member name {1}", className, memberName);
                 Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
                 return null;
             }
