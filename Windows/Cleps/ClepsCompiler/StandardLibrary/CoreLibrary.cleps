@@ -64,5 +64,33 @@ namespace System.Types
 		{
 			return RawInteger > @valueToCompare.RawInteger;
 		};
+
+		public operator + fn System.Types.Int32 (System.Types.Int32 @valueToAdd)
+		{
+			System.Types.Int32 @ret;
+			@ret.RawInteger = RawInteger + @valueToAdd.RawInteger;
+			return @ret;
+		};
+
+		public operator - fn System.Types.Int32 (System.Types.Int32 @valueToSub)
+		{
+			System.Types.Int32 @ret;
+			@ret.RawInteger = RawInteger - @valueToSub.RawInteger;
+			return @ret;
+		};
+
+		public operator * fn System.Types.Int32 (System.Types.Int32 @valueToMul)
+		{
+			System.Types.Int32 @ret;
+			@ret.RawInteger = RawInteger * @valueToMul.RawInteger;
+			return @ret;
+		};
+
+		public operator / fn System.Types.Int32 (System.Types.Int32 @valueToDiv)
+		{
+			System.Types.Int32 @ret;
+			@ret.RawInteger = RawInteger / @valueToDiv.RawInteger;
+			return @ret;
+		};
 	}
 }

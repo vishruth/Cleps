@@ -4,6 +4,7 @@ using ClepsCompiler.CompilerHelpers;
 using LLVMSharp;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -101,7 +102,7 @@ namespace ClepsCompiler.Compiler
             ClepsParser.TypenameContext returnTypeContext = context.operatorFunctionDeclarationStatment().FunctionReturnType;
             ClepsType clepsReturnType = ClepsType.GetBasicType(returnTypeContext);
             ClepsParser.FunctionParametersListContext parametersContext = context.operatorFunctionDeclarationStatment().functionParametersList();
-            string functionName = context.operatorFunctionDeclarationStatment().FunctionName.Text;
+            string functionName = context.operatorFunctionDeclarationStatment().FunctionName.GetText();
             return VisitFunctionDeclarationBody(context, clepsReturnType, parametersContext, functionName, isStatic);
         }
 
@@ -431,14 +432,28 @@ namespace ClepsCompiler.Compiler
 
         public override LLVMRegister VisitFunctionFieldAssignmentStatement([NotNull] ClepsParser.FunctionFieldAssignmentStatementContext context)
         {
+            LLVMValueRef? instance = null;
+            string className;
+            string memberName = context.FieldName.Name.Text;
+
             if (context.LeftExpression != null)
             {
-                throw new NotImplementedException("Expressions on the left hand side not yet supported");
+                //field access on an expression
+                LLVMRegister leftExpressionRegister = Visit(context.LeftExpression);
+                className = leftExpressionRegister.VariableType.RawTypeName;
+                instance = leftExpressionRegister.LLVMPtrValueRef;
             }
+            else
+            {
+                //field access on the same class of this member function
+                className = String.Join(".", CurrentNamespaceAndClass);
 
-            string memberName = context.FieldName.Name.Text;
-            string className = String.Join(".", CurrentNamespaceAndClass);
-            string fullFunctionName = String.Join(".", FunctionHierarchy);
+                if (VariableManager.IsVariableDefined("this"))
+                {
+                    LLVMRegister instancePtr = VariableManager.GetVariable("this");
+                    instance = LLVM.BuildLoad(Builder, instancePtr.LLVMPtrValueRef, "this");
+                }
+            }
 
             if (!ClassManager.DoesClassContainMember(className, memberName))
             {
@@ -447,15 +462,30 @@ namespace ClepsCompiler.Compiler
                 return null;
             }
 
-            bool iscurrFuncStatic = ClassManager.DoesClassContainMember(className, fullFunctionName, true /* search for static members */);
-            bool isMemberStatic = ClassManager.DoesClassContainMember(className, memberName, true /* search for static members */);
-
-            if (iscurrFuncStatic && !isMemberStatic)
+            //some additional checks for field access on the same class of this member function
+            if (context.LeftExpression == null)
             {
-                string errorMessage = String.Format("Static function {0} cannot access the non static member {1}", fullFunctionName, memberName);
-                Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
-                return null;
+                string fullFunctionName = String.Join(".", FunctionHierarchy);
+                bool iscurrFuncStatic = ClassManager.DoesClassContainMember(className, fullFunctionName, true /* search for static members */);
+                bool isMemberStatic = ClassManager.DoesClassContainMember(className, memberName, true /* search for static members */);
+
+                if (iscurrFuncStatic && !isMemberStatic)
+                {
+                    string errorMessage = String.Format("Static function {0} cannot access the non static member {1}", fullFunctionName, memberName);
+                    Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
+                    return null;
+                }
             }
+
+            LLVMRegister memberPtrRegister = GetStaticOrMemberField(instance, className, memberName);
+            LLVMRegister assignmentValuePtrRegister = Visit(context.RightExpression);
+            string assignmentOperator = context.ASSIGNMENT_OPERATOR().GetText();
+            return GenerateAssignmentToRegister(context, memberPtrRegister, assignmentValuePtrRegister, assignmentOperator);
+        }
+
+        private LLVMRegister GetStaticOrMemberField(LLVMValueRef? instance, string className, string memberName)
+        {
+            bool isMemberStatic = ClassManager.DoesClassContainMember(className, memberName, true /* search for static members */);
 
             LLVMRegister memberPtrRegister;
             if (isMemberStatic)
@@ -467,17 +497,14 @@ namespace ClepsCompiler.Compiler
             }
             else
             {
-                LLVMRegister thisPtr = VariableManager.GetVariable("this");
-                LLVMValueRef thisVar = LLVM.BuildLoad(Builder, thisPtr.LLVMPtrValueRef, "this");
                 uint fieldNumber = (uint)ClassManager.LoadedClassesAndMembers[className].MemberVariables.Keys.ToList().IndexOf(memberName);
-                LLVMValueRef memberPtr = LLVM.BuildStructGEP(Builder, thisVar, fieldNumber, memberName + "Field");
+                Debug.Assert(instance.HasValue);
+                LLVMValueRef memberPtr = LLVM.BuildStructGEP(Builder, instance.Value, fieldNumber, memberName + "Field");
                 ClepsType memberType = ClassManager.LoadedClassesAndMembers[className].MemberVariables[memberName];
                 memberPtrRegister = new LLVMRegister(memberType, memberPtr);
             }
 
-            LLVMRegister assignmentValuePtrRegister = Visit(context.RightExpression);
-            string assignmentOperator = context.ASSIGNMENT_OPERATOR().GetText();
-            return GenerateAssignmentToRegister(context, memberPtrRegister, assignmentValuePtrRegister, assignmentOperator);
+            return memberPtrRegister;
         }
 
         #endregion Function Statement Implementations
@@ -583,49 +610,32 @@ namespace ClepsCompiler.Compiler
             }
 
             string expressionClassName = leftExpression.VariableType.RawTypeName;
-            string operatorName = context.OPERATOR_SYMBOL().GetText();
+            string operatorName = context.operatorSymbol().GetText();
 
             if (ClepsLLVMTypeConvertorInst.IsPrimitiveLLVMType(leftExpression.VariableType))
             {
-                LLVMIntPredicate nativeOperator;
-                if (operatorName == "==")
+                LLVMValueRef leftValue = LLVM.BuildLoad(Builder, leftExpression.LLVMPtrValueRef, "leftValue");
+                LLVMValueRef rightValue = LLVM.BuildLoad(Builder, rightExpression.LLVMPtrValueRef, "rightValue");
+                LLVMRegister ret = null;
+
+                //will return null if this is not an arithmetic operation
+                ret = GenerateNativeArithmeticOperation(context, leftValue, rightValue, operatorName);
+
+                if(ret == null)
                 {
-                    nativeOperator = LLVMIntPredicate.LLVMIntEQ;
+                    //will return null if this is not a comparison operation
+                    ret = GenerateNativeComparison(context, leftValue, rightValue, operatorName);
                 }
-                else if (operatorName == "!=")
-                {
-                    nativeOperator = LLVMIntPredicate.LLVMIntNE;
-                }
-                else if (operatorName == "<=")
-                {
-                    nativeOperator = LLVMIntPredicate.LLVMIntSLE;
-                }
-                else if (operatorName == ">=")
-                {
-                    nativeOperator = LLVMIntPredicate.LLVMIntSGE;
-                }
-                else if (operatorName == "<")
-                {
-                    nativeOperator = LLVMIntPredicate.LLVMIntSLT;
-                }
-                else if (operatorName == ">")
-                {
-                    nativeOperator = LLVMIntPredicate.LLVMIntSGT;
-                }
-                else
+
+                if(ret == null)
                 {
                     string errorMessage = String.Format("The native class {0} does not support operator {1}", expressionClassName, operatorName);
                     Status.AddError(new CompilerError(FileName, context.Start.Line, context.Start.Column, errorMessage));
                     //just assume this is operation returns a constant int to avoid stalling the compilation
-                    LLVMRegister ret = GetConstantIntRegisterOfClepsType(context, LLVM.Int32TypeInContext(Context), 7, "int32" /* friendly type name */);
-                    return ret;
+                    ret = GetConstantIntRegisterOfClepsType(context, LLVM.Int32TypeInContext(Context), 7, "int32" /* friendly type name */);
                 }
 
-                LLVMValueRef leftValue = LLVM.BuildLoad(Builder, leftExpression.LLVMPtrValueRef, "leftValue");
-                LLVMValueRef rightValue = LLVM.BuildLoad(Builder, rightExpression.LLVMPtrValueRef, "rightValue");
-                LLVMValueRef isEqual = LLVM.BuildICmp(Builder, nativeOperator, leftValue, rightValue, "nativeIsEqual");
-                LLVMRegister operatorRet = GetIntRegisterOfClepsType(context, LLVM.Int1TypeInContext(Context), isEqual, "bool");
-                return operatorRet;
+                return ret;
             }
             else
             {
@@ -669,6 +679,81 @@ namespace ClepsCompiler.Compiler
                 LLVMRegister operatorReturn = new LLVMRegister(returnType, operatorReturnPtr);
                 return operatorReturn;
             }
+        }
+
+        private LLVMRegister GenerateNativeArithmeticOperation(ParserRuleContext context, LLVMValueRef leftValue, LLVMValueRef rightValue, string operatorName)
+        {
+            LLVMValueRef result;
+            string prefix;
+
+            if (operatorName == "+")
+            {
+                prefix = "addition";
+                result = LLVM.BuildAdd(Builder, leftValue, rightValue, prefix + "Result");
+            }
+            else if(operatorName == "-")
+            {
+                prefix = "subtraction";
+                result = LLVM.BuildSub(Builder, leftValue, rightValue, prefix + "Result");
+            }
+            else if (operatorName == "*")
+            {
+                prefix = "multiply";
+                result = LLVM.BuildMul(Builder, leftValue, rightValue, prefix + "Result");
+            }
+            else if (operatorName == "/")
+            {
+                prefix = "divide";
+                result = LLVM.BuildSDiv(Builder, leftValue, rightValue, prefix + "Result");
+            }
+            else
+            {
+                return null;
+            }
+
+            LLVMTypeRef resultLLVMType = LLVM.TypeOf(result);
+            LLVMValueRef resultPtr = LLVM.BuildAlloca(Builder, resultLLVMType, prefix + "ResultPtr");
+            LLVM.BuildStore(Builder, result, resultPtr);
+            ClepsType resultType = ClepsLLVMTypeConvertorInst.GetClepsNativeLLVMType(resultLLVMType);
+            LLVMRegister ret = new LLVMRegister(resultType, resultPtr);
+            return ret;            
+        }
+
+        private LLVMRegister GenerateNativeComparison(ParserRuleContext context, LLVMValueRef leftValue, LLVMValueRef rightValue, string operatorName)
+        {
+            LLVMIntPredicate nativeOperator;
+            if (operatorName == "==")
+            {
+                nativeOperator = LLVMIntPredicate.LLVMIntEQ;
+            }
+            else if (operatorName == "!=")
+            {
+                nativeOperator = LLVMIntPredicate.LLVMIntNE;
+            }
+            else if (operatorName == "<=")
+            {
+                nativeOperator = LLVMIntPredicate.LLVMIntSLE;
+            }
+            else if (operatorName == ">=")
+            {
+                nativeOperator = LLVMIntPredicate.LLVMIntSGE;
+            }
+            else if (operatorName == "<")
+            {
+                nativeOperator = LLVMIntPredicate.LLVMIntSLT;
+            }
+            else if (operatorName == ">")
+            {
+                nativeOperator = LLVMIntPredicate.LLVMIntSGT;
+            }
+            else
+            {
+                return null;
+            }
+
+            LLVMValueRef isEqual = LLVM.BuildICmp(Builder, nativeOperator, leftValue, rightValue, "nativeIsEqual");
+            LLVMRegister operatorRet = GetIntRegisterOfClepsType(context, LLVM.Int1TypeInContext(Context), isEqual, "bool");
+            return operatorRet;
         }
 
         public override LLVMRegister VisitNumericAssignments([NotNull] ClepsParser.NumericAssignmentsContext context)

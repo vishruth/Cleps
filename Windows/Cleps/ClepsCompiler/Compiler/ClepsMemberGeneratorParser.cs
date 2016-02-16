@@ -162,7 +162,7 @@ namespace ClepsCompiler.Compiler
         {
             bool isStatic = context.STATIC() != null;
             var assignmentFunctionDeclarationStatement = context.operatorFunctionDeclarationStatment();
-            string functionName = assignmentFunctionDeclarationStatement.FunctionName.Text;
+            string functionName = assignmentFunctionDeclarationStatement.FunctionName.GetText();
             ClepsParser.TypenameContext functionReturnContext = assignmentFunctionDeclarationStatement.FunctionReturnType;
             ClepsType clepsReturnType = ClepsType.GetBasicType(functionReturnContext);
             ClepsParser.FunctionParametersListContext parameterContext = assignmentFunctionDeclarationStatement.functionParametersList();
